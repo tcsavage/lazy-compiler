@@ -1,49 +1,22 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include "RTS.h"
 
-#define INS_PUSHGLOBAL 0
-#define INS_PUSHINT 1
-#define INS_PUSH 2
-#define INS_MKAP 3
-#define INS_SLIDE 4
-#define INS_UNWIND 5
+// Stack environment.
+int stackSize = 256;
+Node **stack;
+int stackHead;
 
-#define NODE_NUM 0
-#define NODE_AP 1
-#define NODE_GLOBAL 2
+// Instruction environment.
+Instruction *currInstBase;
+int currInstOffset = 0;
 
-typedef struct Instruction {
-    int instType;
-    int arg;
-} Instruction;
+Node **globalTable;
 
-typedef struct Node {
-    int nodeType;
-    void *addr;
-} Node;
-
-typedef struct NodeInt {
-    int value;
-} NodeInt;
-
-typedef struct NodeAp {
-    Node *lhs;
-    Node *rhs;
-} NodeAp;
-
-typedef struct NodeGlobal {
-    int arity;
-    Instruction *code;
-} NodeGlobal;
-
-Node *mkIntNode(int n);
 Node *mkNodeRef(int type, void *node);
 void freeNode(Node *ref);
 
-int stackSize = 256;
-
-Node **stack;
-int stackHead;
+void doUnwind(Instruction *ins);
 
 void sPush(Node *node) {
     stack[stackHead] = node;
@@ -63,56 +36,17 @@ Node *sPop() {
 
 Node *sPeek() {
     if (stackHead > 0) {
-        return stack[stackHead];
+        return stack[stackHead-1];
     } else {
         return NULL;
     }
 }
 
-Instruction *allocInst() {
-    return (Instruction *) malloc(sizeof(Instruction));
-}
-
-Instruction *mkInstPushGlobal(int offset) {
-    Instruction *i = allocInst();
-    i->instType = INS_PUSHGLOBAL;
-    i->arg = offset;
-    return i;
-}
-
-Instruction *mkInstPushInt(int n) {
-    Instruction *i = allocInst();
-    i->instType = INS_PUSHINT;
-    i->arg = n;
-    return i;
-}
-
-Instruction *mkInstPush(int n) {
-    Instruction *i = allocInst();
-    i->instType = INS_PUSH;
-    i->arg = n;
-    return i;
-}
-
-Instruction *mkInstMkAp() {
-    Instruction *i = allocInst();
-    i->instType = INS_MKAP;
-    i->arg = 0;
-    return i;
-}
-
-Instruction *mkInstSlide(int n) {
-    Instruction *i = allocInst();
-    i->instType = INS_SLIDE;
-    i->arg = n;
-    return i;
-}
-
-Instruction *mkInstUnwind() {
-    Instruction *i = allocInst();
-    i->instType = INS_UNWIND;
-    i->arg = 0;
-    return i;
+Node *sIndex(int i) {
+    if (i < 0) {
+        i = 0;
+    }
+    return stack[stackHead-i-1];
 }
 
 void printNode(Node *node) {
@@ -176,18 +110,147 @@ void freeNode(Node *ref) {
     free(ref);
 }
 
-int main(int argc, char **argv) {
+Instruction insEnd() {
+    Instruction ins;
+    ins.instType = INS_END;
+    ins.arg = 0;
+    return ins;
+}
+
+Instruction insPushGlobal(int n) {
+    Instruction ins;
+    ins.instType = INS_PUSHGLOBAL;
+    ins.arg = n;
+    return ins;
+}
+
+Instruction insPushInt(int n) {
+    Instruction ins;
+    ins.instType = INS_PUSHINT;
+    ins.arg = n;
+    return ins;
+}
+
+Instruction insPush(int n) {
+    Instruction ins;
+    ins.instType = INS_PUSH;
+    ins.arg = n;
+    return ins;
+}
+
+Instruction insMkAp() {
+    Instruction ins;
+    ins.instType = INS_MKAP;
+    ins.arg = 0;
+    return ins;
+}
+
+Instruction insSlide(int n) {
+    Instruction ins;
+    ins.instType = INS_SLIDE;
+    ins.arg = n;
+    return ins;
+}
+
+Instruction insUnwind() {
+    Instruction ins;
+    ins.instType = INS_UNWIND;
+    ins.arg = 0;
+    return ins;
+}
+
+Node *getArg(Node *ap) {
+    if (ap->nodeType == NODE_AP) {
+        NodeAp *apn = (NodeAp *) ap->addr;
+        return apn->rhs;
+    } else {
+        printf("Tried to get arg of non-function.\n");
+        exit(1);
+    }
+}
+
+void decodeAndRun(Instruction *ins) {
+    switch (ins->instType) {
+        case INS_END:
+            printf("Attempted to run END instruction. This shouldn't ever happen.\n");
+            exit(1);
+            break;
+        case INS_PUSHGLOBAL:
+            sPush(globalTable[ins->arg]);
+            break;
+        case INS_PUSHINT:
+            ;
+            Node *newInt = mkNodeInt(ins->arg);
+            sPush(newInt);
+            break;
+        case INS_PUSH:
+            ;
+            Node *stackItem = sIndex(ins->arg+1);
+            Node *arg = getArg(stackItem);
+            sPush(arg);
+            break;
+        case INS_MKAP:
+            ;
+            Node *a = sPop();
+            Node *b = sPop();
+            sPush(mkNodeAp(a, b));
+            break;
+        case INS_SLIDE:
+            ;
+            Node *x = sPop();
+            int i;
+            for (i = 0; i < ins->arg; ++i) {
+                sPop();
+            }
+            sPush(x);
+            break;
+        case INS_UNWIND:
+            doUnwind(ins);
+            break;
+        default:
+            printf("Unknown instruction.\n");
+    }
+}
+
+void doUnwind(Instruction *ins) {
+    printf("Unwinding...\n");
+    Node *head = sPeek();
+    switch (head->nodeType) {
+        case NODE_AP:
+            printf("AP.\n");
+            while (head->nodeType == NODE_AP) {
+                NodeAp *ap = (NodeAp *) head->addr;
+                sPush(ap->lhs);
+                head = ap->lhs;
+            }
+            doUnwind(ins);
+            break;
+        case NODE_GLOBAL:
+            printf("GLOBAL\n");
+            ;
+            NodeGlobal *global = (NodeGlobal *) head->addr;
+            currInstBase = global->code;
+            currInstOffset = -1;
+    }
+}
+
+int run(Instruction *insStart, Node *globals[]) {
+    // Init stack.
     stack = (Node **) malloc(stackSize);
     stackHead = 0;
 
-    Node *n1 = mkNodeInt(59);
-    sPush(n1);
-    Node *n2 = mkNodeInt(2);
-    sPush(n2);
-    sPush(mkNodeAp(n1, n2));
+    globalTable = globals;
+    currInstBase = insStart;
+    currInstOffset = 0;
 
+    while (currInstBase[currInstOffset].instType != INS_END) {
+        printf("%d : %d\n", currInstBase[currInstOffset].instType, currInstBase[currInstOffset].arg);
+        decodeAndRun(&currInstBase[currInstOffset]);
+        currInstOffset++;
+    }
+
+    // Cleanup.
     pdfStack();
-
     free(stack);
     return 0;
 }
