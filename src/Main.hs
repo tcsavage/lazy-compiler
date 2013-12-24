@@ -98,15 +98,6 @@ instance Traversable Expr where
   traverse f (Lam s)  = Lam <$> traverse f s
   traverse f (Let bs b) = Let <$> traverse (traverse f) bs <*> traverse f b
 
--- V :: a -> Expr a
--- (:@) :: Expr a -> Expr a -> Expr a
--- Lam :: (Scope () Expr a) -> Expr a
-
--- f(x) = x
--- λx.x
--- \x -> x
--- lam 'x' $ V 'x'
-
 instance Eq1 Expr
 
 instance Ord1 Expr
@@ -172,27 +163,10 @@ data Module = Module { _modName :: String
                      , _tlDecls :: [(Ident, Expr Ident)]
                      } deriving (Show)
 
-getTopLevelNames :: Module -> [String]
-getTopLevelNames = nub . map (name . fst) . _tlDecls
-
 makeLenses ''Module
 
-testMain :: Expr Ident
-testMain = lam id_in $ V id_add :@ L 5 :@ V id_in
-    where
-        id_in = Id "in" TyInt
-        id_add = Id "add" (TyInt ~> TyInt ~> TyInt)
-
-i = lam (Id "x" TyInt) $ V (Id "x" TyInt)
-k = lam (Id "x" TyInt) $ lam (Id "y" TyInt) $ V (Id "x" TyInt)
-
-testMod :: Module
-testMod = Module "Test" [(id_id, i), (id_const, k), (id_main, testMain), (id_add, PrimFun $ PrimBinOp PrimAdd)]
-    where
-        id_id = Id "id" (TyInt ~> TyInt)
-        id_add = Id "add" (TyInt ~> TyInt ~> TyInt)
-        id_main = Id "main" (TyInt ~> TyInt)
-        id_const = Id "const" (TyInt ~> TyInt ~> TyInt)
+getTopLevelNames :: Module -> [String]
+getTopLevelNames = nub . map (name . fst) . _tlDecls
 
 interpret :: Module -> Int -> Maybe Int
 interpret (Module mn decls) input = do
@@ -207,6 +181,28 @@ interpret_ (Module mn decls) input = do
 eval :: Expr a -> Int
 eval (L r) = r
 eval _ = error "Result is not an integer."
+
+testMain :: Expr Ident
+testMain = lam id_in $ V id_add :@ L 5 :@ V id_in
+    where
+        id_in = Id "in" TyInt
+        id_add = Id "add" (TyInt ~> TyInt ~> TyInt)
+
+i = lam (Id "x" TyInt) $ V (Id "x" TyInt)
+k = lam (Id "x" TyInt) $ lam (Id "y" TyInt) $ V (Id "x" TyInt)
+s = lam id_x $ lam id_y $ lam id_z $ V id_x :@ V id_z :@ (V id_y :@ V id_z)
+    where
+        id_x = Id "x" (TyInt ~> TyInt ~> TyInt)
+        id_y = Id "y" (TyInt ~> TyInt)
+        id_z = Id "z" TyInt
+
+testMod :: Module
+testMod = Module "Test" [(id_id, i), (id_const, k), (id_main, testMain), (id_add, PrimFun $ PrimBinOp PrimAdd)]
+    where
+        id_id = Id "id" (TyInt ~> TyInt)
+        id_add = Id "add" (TyInt ~> TyInt ~> TyInt)
+        id_main = Id "main" (TyInt ~> TyInt)
+        id_const = Id "const" (TyInt ~> TyInt ~> TyInt)
 
 {-
 Look for a decl called "main"
