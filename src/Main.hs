@@ -6,13 +6,15 @@ import Data.Char
 import Data.String
 import System.Environment
 import Text.Printf
+import Text.Show.Pretty
 
 import AST
-import Parsec
 import Compiler
 import GMachine
 import GMachine.Interpreter
 import GMachine.ViaC
+import Parsec
+import PrettyPrinter
 
 main :: IO ()
 main = do
@@ -20,6 +22,8 @@ main = do
     ast <- genAST <$> readFile srcFile
     case backend of
         "-bviac" -> writeFile (srcFile++".c") $ generateC $ map compileTopLevel ast
+        "-bpp" -> mapM_ (putStrLn . pp) ast
+        "-bppgc" -> putStrLn $ ppShow $ map compileTopLevel ast
         "-biv" -> do
             s0 <- mkState $ map compileTopLevel ast
             eval_ s0
