@@ -11,6 +11,7 @@ import AST
 import Parsec
 import Compiler
 import GMachine
+import GMachine.Interpreter
 import GMachine.ViaC
 
 main :: IO ()
@@ -19,6 +20,9 @@ main = do
     ast <- genAST <$> readFile srcFile
     case backend of
         "-bviac" -> writeFile (srcFile++".c") $ generateC $ map compileTopLevel ast
+        "-biv" -> do
+            s0 <- mkState $ map compileTopLevel ast
+            eval_ s0
         _ -> error "Unsupported backend."
 
 genAST :: String -> [(Ident, Expr Ident)]
