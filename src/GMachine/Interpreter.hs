@@ -30,6 +30,7 @@ data GMState = GMState { gmInst :: GMCode
 data Node = NNum Int  -- Value
           | NAp Addr Addr  -- Addr0 must be a function
           | NGlobal Int GMCode  -- Arity and instructions
+          | NInd Addr  -- Indirection node
           deriving (Show, Eq)
 
 -- | Lets us pretty print `Addr` values when inspecting state.
@@ -64,6 +65,35 @@ stackPush :: Addr -> GMState -> GMState
 stackPush addr s0 = s0 { gmStack = addr:stack0 }
     where
         stack0 = gmStack s0
+
+-- | Pop.
+stackPop :: GMState -> (Addr, GMState)
+stackPop s0 = (head stack0, s0 { gmStack = drop 1 stack0 })
+    where
+        stack0 = gmStack s0
+
+-- | Pop many.
+stackPopMany :: Int -> GMState -> GMState
+stackPopMany n s0 = s0 { gmStack = drop n stack0 }
+    where
+        stack0 = gmStack s0
+
+-- | Peek.
+stackPeek :: GMState -> Addr
+stackPeek s0 = top
+    where
+        (top:_) = gmStack s0
+
+-- | Apply a function to the head of a list only.
+appHead :: (a -> a) -> [a] -> [a]
+appHead _ [] = []
+appHead f (x:xs) = f x : xs
+
+-- | Stack rewrite.
+stackRewrite :: Addr -> Int -> GMState -> GMState
+stackRewrite addr pos s0 = s0 { gmStack = top ++ appHead (const addr) btm }
+    where
+      (top, btm) = splitAt pos $ gmStack s0
 
 -- | Return the heap address of a global.
 getGlobal :: Name -> GMState -> Addr
@@ -122,7 +152,8 @@ dispatch (PushGlobal name) = pushGlobal name
 dispatch (PushInt n) = pushInt n
 dispatch (Push x) = push x
 dispatch MkAp = mkAp
-dispatch (Slide n) = slide n
+dispatch (Update n) = update n
+dispatch (Pop n) = pop n
 dispatch Unwind = unwind
 
 -- | Lookup the address of the given global and push it onto the stack.
@@ -154,6 +185,17 @@ slide n s0 = pure $ s0 { gmStack = x : drop n xs }
     where
         (x:xs) = gmStack s0
 
+update :: Int -> GMState -> IO GMState
+update 0 s0 = pure s0
+update n s0 = do
+    let (top, s1) = stackPop s0
+    (addr, s2) <- hAlloc (NInd top) s1
+    pure $ stackRewrite addr n s2
+
+pop :: Int -> GMState -> IO GMState
+pop 0 = pure
+pop n = pure . stackPopMany n
+
 -- | Traverse the graph's application nodes from HEAD and push their addresses onto the stack. Stop at the first global and prepare it to run.
 unwind :: GMState -> IO GMState
 unwind state = pure $ newState $ hDeref a state
@@ -164,3 +206,6 @@ unwind state = pure $ newState $ hDeref a state
         newState (NGlobal n code)
             | length as < n = error "Unwinding with too few arguments."
             | otherwise = state { gmInst = code }
+        newState (NInd addr) = state { gmInst = [Unwind], gmStack = addr:as }
+            where
+                (a:as) = gmStack state

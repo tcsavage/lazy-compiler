@@ -6,12 +6,14 @@
 #define INS_PUSHINT 1
 #define INS_PUSH 2
 #define INS_MKAP 3
-#define INS_SLIDE 4
-#define INS_UNWIND 5
+#define INS_UPDATE 4
+#define INS_POP 5
+#define INS_UNWIND 6
 
 #define NODE_NUM 0
 #define NODE_AP 1
 #define NODE_GLOBAL 2
+#define NODE_IND 3
 
 typedef struct Instruction {
     int instType;
@@ -37,17 +39,23 @@ typedef struct NodeGlobal {
     Instruction *code;
 } NodeGlobal;
 
+typedef struct NodeInd {
+    Node *ptr;
+} NodeInd;
+
 Instruction insEnd();
 Instruction insPushGlobal(int n);
 Instruction insPushInt(int n);
 Instruction insPush(int n);
 Instruction insMkAp();
-Instruction insSlide(int n);
+Instruction insUpdate(int n);
+Instruction insPop(int n);
 Instruction insUnwind();
 
 Node *mkNodeInt(int n);
 Node *mkNodeAp(Node *l, Node *r);
 Node *mkNodeGlobal(int arity, Instruction *code);
+Node *mkNodeInd(Node *ptr);
 Node *mkNodeRef(int type, void *node);
 
 int run(Instruction *insStart, Node **globals);

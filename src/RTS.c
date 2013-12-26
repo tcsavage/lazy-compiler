@@ -15,15 +15,19 @@ Node **globalTable;
 
 Node *mkNodeRef(int type, void *node);
 void freeNode(Node *ref);
+void printNode(Node *node);
 
 void doUnwind(Instruction *ins);
 
 void sPush(Node *node) {
+    // printf("Pushing... ");
+    // printNode(node);
     stack[stackHead] = node;
     stackHead++;
 }
 
 Node *sPop() {
+    // printf("Pop\n");
     if (stackHead > 0) {
         stackHead--;
         Node *tmp = stack[stackHead];
@@ -49,6 +53,10 @@ Node *sIndex(int i) {
     return stack[stackHead-i-1];
 }
 
+void sReplace(int i, Node *n) {
+    stack[stackHead-i-1] = n;
+}
+
 void printNode(Node *node) {
     switch (node->nodeType) {
         case NODE_NUM:
@@ -64,8 +72,15 @@ void printNode(Node *node) {
             NodeGlobal *ng = (NodeGlobal *) node->addr;
             printf("Global node (arity %d)\n", ng->arity);
             break;
+        case NODE_IND:
+            ;
+            NodeInd *nin = (NodeInd *) node->addr;
+            printf("Indirection node... ");
+            printNode(nin->ptr);
+            break;
         default:
             printf("Error: Unknown node type.\n");
+            exit(1);
     }
 }
 
@@ -96,6 +111,12 @@ Node *mkNodeGlobal(int arity, Instruction *code) {
     ng->arity = arity;
     ng->code = code;
     return mkNodeRef(NODE_GLOBAL, (void *) ng);
+}
+
+Node *mkNodeInd(Node *ptr) {
+    NodeInd *ni = (NodeInd *) malloc(sizeof(NodeInd));
+    ni->ptr = ptr;
+    return mkNodeRef(NODE_IND, (void *) ni);
 }
 
 Node *mkNodeRef(int type, void *node) {
@@ -145,9 +166,16 @@ Instruction insMkAp() {
     return ins;
 }
 
-Instruction insSlide(int n) {
+Instruction insUpdate(int n) {
     Instruction ins;
-    ins.instType = INS_SLIDE;
+    ins.instType = INS_UPDATE;
+    ins.arg = n;
+    return ins;
+}
+
+Instruction insPop(int n) {
+    Instruction ins;
+    ins.instType = INS_POP;
     ins.arg = n;
     return ins;
 }
@@ -195,14 +223,19 @@ void decodeAndRun(Instruction *ins) {
             Node *b = sPop();
             sPush(mkNodeAp(a, b));
             break;
-        case INS_SLIDE:
+        case INS_UPDATE:
             ;
-            Node *x = sPop();
+            if (ins->arg > 0) {
+                Node *top = sPop();
+                sReplace(ins->arg, mkNodeInd(top));
+            }
+            break;
+        case INS_POP:
+            ;
             int i;
             for (i = 0; i < ins->arg; ++i) {
                 sPop();
             }
-            sPush(x);
             break;
         case INS_UNWIND:
             doUnwind(ins);
@@ -213,11 +246,11 @@ void decodeAndRun(Instruction *ins) {
 }
 
 void doUnwind(Instruction *ins) {
-    printf("Unwinding...\n");
+    // printf("Unwinding...\n");
     Node *head = sPeek();
     switch (head->nodeType) {
         case NODE_AP:
-            printf("AP.\n");
+            // printf("AP.\n");
             while (head->nodeType == NODE_AP) {
                 NodeAp *ap = (NodeAp *) head->addr;
                 sPush(ap->lhs);
@@ -226,11 +259,19 @@ void doUnwind(Instruction *ins) {
             doUnwind(ins);
             break;
         case NODE_GLOBAL:
-            printf("GLOBAL\n");
             ;
+            // printf("GLOBAL\n");
             NodeGlobal *global = (NodeGlobal *) head->addr;
             currInstBase = global->code;
             currInstOffset = -1;
+            break;
+        case NODE_IND:
+            ;
+            // printf("IND\n");
+            NodeInd *ind = (NodeInd *) head->addr;
+            sPop();
+            sPush(ind->ptr);
+            doUnwind(ins);
     }
 }
 
@@ -244,7 +285,7 @@ int run(Instruction *insStart, Node *globals[]) {
     currInstOffset = 0;
 
     while (currInstBase[currInstOffset].instType != INS_END) {
-        printf("%d : %d\n", currInstBase[currInstOffset].instType, currInstBase[currInstOffset].arg);
+        // printf("%d : %d\n", currInstBase[currInstOffset].instType, currInstBase[currInstOffset].arg);
         decodeAndRun(&currInstBase[currInstOffset]);
         currInstOffset++;
     }

@@ -47,7 +47,9 @@ sc expr = r body env
         body = getBody expr
 
 r :: Expr Ident -> VarMap -> [Instruction String]
-r body env = c body env ++ [Slide $ length env + 1, Unwind]
+r body env = c body env ++ [Update d, Pop d, Unwind]
+    where
+        d = length env
 
 c :: Expr Ident -> VarMap -> [Instruction String]
 c (V ident) env = case lookup (name ident) env of

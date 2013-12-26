@@ -1,0 +1,3 @@
+id : Int -> Int = \x:Int.x:Int
+twice : (Int->Int)->Int->Int = \f:Int->Int.\x:Int.f:Int->Int @ x:Int
+main : Int = twice:(Int->Int)->Int->Int @ twice:(Int->Int)->Int->Int @ id:Int->Int @ 3

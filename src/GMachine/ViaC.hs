@@ -26,7 +26,8 @@ translateIns (PushGlobal n) = printf "insPushGlobal(%d)" n
 translateIns (PushInt n) = printf "insPushInt(%d)" n
 translateIns (Push n) = printf "insPush(%d)" n
 translateIns MkAp = "insMkAp()"
-translateIns (Slide n) = printf "insSlide(%d)" n
+translateIns (Update n) = printf "insUpdate(%d)" n
+translateIns (Pop n) = printf "insPop(%d)" n
 translateIns Unwind = "insUnwind()"
 
 translateCode :: [Instruction Int] -> String
@@ -39,4 +40,4 @@ translateGlobal (name, offset, code, arity) = unlines [commentLine, insDefLine, 
         commentLine = printf " // Global `%s`. Offset %d. Arity %d" name offset arity
         insDefLine = printf " Instruction global_%s_is[%d] = { %s };" name insCount (translateCode code)
         nodeAllocLine = printf " Node *global_%s_node = mkNodeGlobal(%d, global_%s_is);" name arity name
-        tableInsLine = printf " globalTable[%d] = global_%s_node;" offset name
+        tableInsLine = printf " gt[%d] = global_%s_node;" offset name
