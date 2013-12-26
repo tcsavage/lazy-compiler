@@ -36,6 +36,17 @@ data Node = NNum Int  -- Value
 instance Show Unique where
     show = show . hashUnique
 
+mkState :: [(Name, GMCode, Int)] -> IO GMState
+mkState globals = do
+    (globalTable, heap) <- initGlobals globals
+    let mainF = findMain globals
+    pure $ GMState mainF [] (M.fromList heap) (M.fromList globalTable)
+
+findMain :: [(Name, GMCode, Int)] -> GMCode
+findMain [] = error "Main function not found."
+findMain (("main", code, arity):_) = code
+findMain (_:rest) = findMain rest
+
 initGlobals :: [(Name, GMCode, Int)] -> IO ([(Name, Addr)], [(Addr, Node)])
 initGlobals decls = unzip <$> mapM initGlobal decls
 
