@@ -30,6 +30,11 @@ data Type = TyFun Type Type
 (~>) :: Type -> Type -> Type
 (~>) = TyFun
 
+data Decl = Decl { dident :: Ident, dval :: Expr Ident } deriving (Show, Eq)
+
+unDecl :: Decl -> (Ident, Expr Ident)
+unDecl (Decl i e) = (i, e)
+
 data Ident = Id { name :: String
                 , typeOf :: Type
                 } deriving (Eq,Ord,Show,Read)
