@@ -173,6 +173,13 @@ Instruction insSlide(int n) {
     return ins;
 }
 
+Instruction insAlloc(int n) {
+    Instruction ins;
+    ins.instType = INS_ALLOC;
+    ins.arg = n;
+    return ins;
+}
+
 Instruction insUpdate(int n) {
     Instruction ins;
     ins.instType = INS_UPDATE;

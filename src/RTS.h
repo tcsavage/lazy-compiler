@@ -7,9 +7,10 @@
 #define INS_PUSH 2
 #define INS_MKAP 3
 #define INS_SLIDE 4
-#define INS_UPDATE 5
-#define INS_POP 6
-#define INS_UNWIND 7
+#define INS_ALLOC 5
+#define INS_UPDATE 6
+#define INS_POP 7
+#define INS_UNWIND 8
 
 #define NODE_NUM 0
 #define NODE_AP 1
@@ -50,6 +51,7 @@ Instruction insPushInt(int n);
 Instruction insPush(int n);
 Instruction insMkAp();
 Instruction insSlide(int n);
+Instruction insAlloc(int n);
 Instruction insUpdate(int n);
 Instruction insPop(int n);
 Instruction insUnwind();

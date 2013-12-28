@@ -7,6 +7,7 @@ data Instruction a = PushGlobal a
                    | Push Int
                    | MkAp
                    | Slide Int
+                   | Alloc Int
                    | Update Int
                    | Pop Int
                    | Unwind
@@ -18,6 +19,7 @@ instance Functor Instruction where
     fmap _ (Push n) = (Push n)
     fmap _ MkAp = MkAp
     fmap _ (Slide n) = (Slide n)
+    fmap _ (Alloc n) = (Alloc n)
     fmap _ (Update n) = (Update n)
     fmap _ (Pop n) = (Pop n)
     fmap _ Unwind = Unwind
