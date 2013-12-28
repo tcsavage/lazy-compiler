@@ -27,6 +27,7 @@ translateIns (PushInt n) = printf "insPushInt(%d)" n
 translateIns (Push n) = printf "insPush(%d)" n
 translateIns MkAp = "insMkAp()"
 translateIns (Update n) = printf "insUpdate(%d)" n
+translateIns (Slide n) = printf "insSlide(%d)" n
 translateIns (Pop n) = printf "insPop(%d)" n
 translateIns Unwind = "insUnwind()"
 

@@ -152,6 +152,7 @@ dispatch (PushGlobal name) = pushGlobal name
 dispatch (PushInt n) = pushInt n
 dispatch (Push x) = push x
 dispatch MkAp = mkAp
+dispatch (Slide n) = slide n
 dispatch (Update n) = update n
 dispatch (Pop n) = pop n
 dispatch Unwind = unwind

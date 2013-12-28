@@ -166,6 +166,13 @@ Instruction insMkAp() {
     return ins;
 }
 
+Instruction insSlide(int n) {
+    Instruction ins;
+    ins.instType = INS_SLIDE;
+    ins.arg = n;
+    return ins;
+}
+
 Instruction insUpdate(int n) {
     Instruction ins;
     ins.instType = INS_UPDATE;
