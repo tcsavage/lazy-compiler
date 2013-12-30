@@ -14,8 +14,8 @@ import "mtl" Control.Monad.State
 import AST
 import GMachine
 
-compile :: Module -> [(String, Instruction String, Int)]
-compile mod = undefined
+compile :: Module -> [(String, [Instruction String], Int)]
+compile mod = map compileTopLevel (_tlDecls mod ++ [(Id "add" (TyInt ~> TyInt), PrimFun $ PrimBinOp PrimAdd)])
 
 compileTopLevel :: (Ident, Expr Ident) -> (String, [Instruction String], Int)
 compileTopLevel (ident, expr) = (name ident, sc expr, getArity expr)
@@ -65,6 +65,7 @@ c (Let True decls expr) env = [Alloc n] ++ compileLetrec decls env' ++ c expr en
     where
         n = length decls
         env' = compileArgs decls env
+c (PrimFun pf) env = compilePrimOp pf env
 
 compileLet :: [(Ident, Expr Ident)] -> VarMap -> [Instruction String]
 compileLet [] _ = []
@@ -78,6 +79,12 @@ compileArgs :: [(Ident, Expr Ident)] -> VarMap -> VarMap
 compileArgs defs env = zip (map (name . fst) defs) [n-1, n-2 .. 0] ++ argOffset n env
     where
         n = length defs
+
+compilePrimOp :: PrimFun -> VarMap -> [Instruction String]
+compilePrimOp (PrimBinOp op) env = [Push 1, Eval, Push 1, Eval, compilePrimBinOp op env, Update 2, Pop 2, Unwind]
+
+compilePrimBinOp :: PrimBinOp -> VarMap -> Instruction String
+compilePrimBinOp PrimAdd env = Add
 
 argOffset :: Int -> VarMap -> VarMap
 argOffset n env = [(i, n+m) | (i, m) <- env]

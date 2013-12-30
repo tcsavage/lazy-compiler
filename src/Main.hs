@@ -19,13 +19,13 @@ import PrettyPrinter
 main :: IO ()
 main = do
     [backend, srcFile] <- getArgs
-    ast <- genAST <$> readFile srcFile
+    mod <- (Module srcFile . genAST) <$> readFile srcFile
     case backend of
-        "-bviac" -> writeFile (srcFile++".c") $ generateC $ map compileTopLevel ast
-        "-bpp" -> mapM_ (putStrLn . pp) ast
-        "-bppgc" -> putStrLn $ ppShow $ map compileTopLevel ast
+        "-bviac" -> writeFile (srcFile++".c") $ generateC $ compile mod
+        "-bpp" -> putStrLn $ pp mod
+        "-bppgc" -> putStrLn $ ppShow $ compile mod
         "-biv" -> do
-            s0 <- mkState $ map compileTopLevel ast
+            s0 <- mkState $ compile mod
             eval_ s0
         _ -> error "Unsupported backend."
 

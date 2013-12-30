@@ -5,8 +5,11 @@ import Text.Printf
 
 import AST
 
-pp :: (Ident, Expr Ident) -> String
-pp (ident, exp) = printf "%s = %s" (ppIdent ident) (ppExpr exp)
+pp :: Module -> String
+pp (Module name decls) = printf "module %s where\n\n%s" name (unlines $ map ppDecl decls)
+
+ppDecl :: (Ident, Expr Ident) -> String
+ppDecl (ident, exp) = printf "%s = %s" (ppIdent ident) (ppExpr exp)
 
 ppIdent :: Ident -> String
 ppIdent (Id name ty) = printf "%s:%s" name (ppType ty)
@@ -20,4 +23,4 @@ ppExpr (L n) = show n
 ppExpr (V ident) = ppIdent ident
 ppExpr (Lam b e) = printf "\\%s. %s" (ppIdent b) (ppExpr e)
 ppExpr (l :@ r) = printf "(%s @ %s)" (ppExpr l) (ppExpr r)
-ppExpr (Let rec ds e) = printf "let%s %s in %s" (if rec then "rec" else "") (intercalate ", " $ map pp ds) (ppExpr e)
+ppExpr (Let rec ds e) = printf "let%s %s in %s" (if rec then "rec" else "") (intercalate ", " $ map ppDecl ds) (ppExpr e)

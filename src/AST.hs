@@ -50,6 +50,8 @@ evalPrimBinOp PrimAdd l r = L (l + r)
 
 getArity :: Expr a -> Int
 getArity (Lam b expr) = 1 + (getArity expr)
+getArity (PrimFun op) = case op of
+    PrimBinOp _ -> 2
 getArity _ = 0
 
 -- Module type.

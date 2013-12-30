@@ -25,6 +25,7 @@ type GMGlobals = M.Map Name Addr
 -- | Represents the state of the machine in a given step.
 data GMState = GMState { gmInst :: GMCode
                        , gmStack :: GMStack
+                       , gmDump :: [(GMCode, GMStack)]
                        , gmHeap :: GMHeap
                        , gmGlobals :: GMGlobals  -- Global lookup table
                        } deriving (Show, Eq)
@@ -59,8 +60,7 @@ heapNull = System.IO.Unsafe.unsafePerformIO newUnique
 mkState :: [(Name, GMCode, Int)] -> IO GMState
 mkState globals = do
     (globalTable, heap) <- initGlobals globals
-    let mainF = findMain globals
-    pure $ GMState mainF [] (M.fromList heap) (M.fromList globalTable)
+    pure $ GMState initialCode [] [] (M.fromList heap) (M.fromList globalTable)
 
 findMain :: [(Name, GMCode, Int)] -> GMCode
 findMain [] = error "Main function not found."
@@ -129,6 +129,30 @@ stackRewrite addr pos = do
     let (top, btm) = splitAt pos $ gmStack s0
     put $ s0 { gmStack = top ++ appHead (const addr) btm }
 
+-- | Get number of dump items.
+dumpSize :: GM Int
+dumpSize = (length . gmDump) <$> get
+
+-- | Restore stack and code from top of dump, keeping current stack head.
+dumpRestore :: GM ()
+dumpRestore = do
+    s0 <- get
+    let d = gmDump s0
+    case d of
+        [] -> pure ()
+        (i', s'):ds -> do
+            h <- stackPop
+            put $ s0 { gmInst = i', gmStack = h:s', gmDump = ds }
+
+-- | Push current instructions and stack onto the dump.
+dumpPush :: GM ()
+dumpPush = do
+    s0 <- get
+    let i = gmInst s0
+    let (a:s) = gmStack s0
+    let d = gmDump s0
+    put $ s0 { gmInst = [Unwind], gmStack = [a], gmDump = (i, s):d }
+
 -- | Return the heap address of a global.
 getGlobal :: Name -> GM Addr
 getGlobal name = (fromMaybe (error $ printf "Couldn't find global `%s`" name) . M.lookup name . gmGlobals) <$> get
@@ -160,11 +184,46 @@ rearrange n = do
     as' <- mapM (fmap getArg . hDeref) $ tail as
     put $ s0 { gmStack = take n as' ++ drop n as }
 
+-- | Create an Int node and push its address onto the stack.
+boxInteger :: Int -> GM ()
+boxInteger n = do
+    addr <- hAlloc $ NNum n
+    stackPush addr
+
+-- | Extract int value from the given address of an int node.
+unboxInteger :: Addr -> GM Int
+unboxInteger addr = do
+    node <- hDeref addr
+    case node of
+        NNum n -> pure n
+        _ -> error "Tried to unbox non-int node."
+
+-- | Run unary operator.
+primOp1 :: (b -> GM ()) -> (Addr -> GM a) -> (a -> b) -> GM ()
+primOp1 boxer unboxer op = do
+    a <- unboxer =<< stackPop
+    boxer $ op a
+
+-- | Run binary operator.
+primOp2 :: (b -> GM ()) -> (Addr -> GM a) -> (a -> a -> b) -> GM ()
+primOp2 boxer unboxer op = do
+    a <- unboxer =<< stackPop
+    b <- unboxer =<< stackPop
+    boxer $ op a b
+
+-- | Primitive unary arithmetic operator.
+primArith1 :: (Int -> Int) -> GM ()
+primArith1 = primOp1 boxInteger unboxInteger
+
+-- | Primitive binary arithmetic operator.
+primArith2 :: (Int -> Int -> Int) -> GM ()
+primArith2 = primOp2 boxInteger unboxInteger
+
 -- | Run the machine witht he given initial state. Produce a list of states.
-eval :: GMState -> IO [GMState]
-eval state0 = (state0 :) <$> states
-    where
-        states = if stateFinal state0 then pure [] else (eval =<< step state0)
+--eval :: GMState -> IO [GMState]
+--eval state0 = (state0 :) <$> states
+--    where
+--        states = if stateFinal state0 then pure [] else (eval =<< step state0)
 
 -- | Run the machine with the given initial state and print each state at each step.
 eval_ :: GMState -> IO ()
@@ -176,13 +235,13 @@ eval_ s0
         eval_ s1
 
 -- | Run the machine with the given initial state and return its final value (or 'Nothing' if not an integer node.)
-evalToValue :: GMState -> IO (Maybe Int)
-evalToValue s0 = do
-    sn <- last <$> eval s0
-    pure $ do
-        head <- listToMaybe $ gmStack sn
-        (NNum r) <- M.lookup head $ gmHeap sn
-        pure r
+--evalToValue :: GMState -> IO (Maybe Int)
+--evalToValue s0 = do
+--    sn <- last <$> eval s0
+--    pure $ do
+--        head <- listToMaybe $ gmStack sn
+--        (NNum r) <- M.lookup head $ gmHeap sn
+--        pure r
 
 -- | Step the machine.
 step :: GMState -> IO GMState
@@ -201,6 +260,8 @@ dispatch (Alloc n) = alloc n
 dispatch (Update n) = update n
 dispatch (Pop n) = pop n
 dispatch Unwind = unwind
+dispatch Eval = eval
+dispatch Add = primArith2 (+)
 
 -- | Lookup the address of the given global and push it onto the stack.
 pushGlobal :: Name -> GM ()
@@ -260,7 +321,9 @@ unwind = do
     node <- hDeref top
     newState node
     where
-        newState (NNum n) = pure ()
+        newState (NNum n) = do
+            ds <- dumpSize
+            when (ds > 0) dumpRestore
         newState (NAp f x) = do
             stackPush f
             setCode [Unwind]
@@ -275,3 +338,6 @@ unwind = do
             stackPop
             stackPush addr
             setCode [Unwind]
+
+eval :: GM ()
+eval = dumpPush

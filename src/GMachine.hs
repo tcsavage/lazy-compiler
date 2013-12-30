@@ -11,6 +11,8 @@ data Instruction a = PushGlobal a
                    | Update Int
                    | Pop Int
                    | Unwind
+                   | Eval
+                   | Add
                    deriving (Show, Eq)
 
 instance Functor Instruction where
@@ -23,3 +25,8 @@ instance Functor Instruction where
     fmap _ (Update n) = (Update n)
     fmap _ (Pop n) = (Pop n)
     fmap _ Unwind = Unwind
+    fmap _ Eval = Eval
+    fmap _ Add = Add
+
+initialCode :: [Instruction String]
+initialCode = [PushGlobal "main", Eval]
