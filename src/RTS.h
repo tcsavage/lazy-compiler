@@ -11,6 +11,9 @@
 #define INS_UPDATE 6
 #define INS_POP 7
 #define INS_UNWIND 8
+#define INS_EVAL 9
+#define INS_ADD 10
+#define INS_MUL 11
 
 #define NODE_NUM 0
 #define NODE_AP 1
@@ -55,6 +58,9 @@ Instruction insAlloc(int n);
 Instruction insUpdate(int n);
 Instruction insPop(int n);
 Instruction insUnwind();
+Instruction insEval();
+Instruction insAdd();
+Instruction insMul();
 
 Node *mkNodeInt(int n);
 Node *mkNodeAp(Node *l, Node *r);

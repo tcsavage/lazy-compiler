@@ -28,8 +28,12 @@ translateIns (Push n) = printf "insPush(%d)" n
 translateIns MkAp = "insMkAp()"
 translateIns (Update n) = printf "insUpdate(%d)" n
 translateIns (Slide n) = printf "insSlide(%d)" n
+translateIns (Alloc n) = printf "insAlloc(%d)" n
 translateIns (Pop n) = printf "insPop(%d)" n
 translateIns Unwind = "insUnwind()"
+translateIns Eval = "insEval()"
+translateIns Add = "insAdd()"
+translateIns Mul = "insMul()"
 
 translateCode :: [Instruction Int] -> String
 translateCode ins = (intercalate ", " $ map translateIns ins) ++ ", insEnd()"
