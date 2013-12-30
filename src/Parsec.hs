@@ -1,100 +1,78 @@
 module Parsec where
 
-import Control.Applicative (pure)
-import Control.Monad
-import Text.ParserCombinators.Parsec
-import Text.ParserCombinators.Parsec.Token
+import Control.Applicative (pure, (<*>), (*>), (<$>))
+import Text.Parsec
+import Text.Parsec.Combinator
+import Text.Parsec.Token
 
 import AST
 
 parseSource :: String -> Either ParseError Decl
-parseSource input = parse decl "(unknown)" input
+parseSource input = parse parseDecl "(unknown)" input
 
-file :: GenParser Char st [Decl]
-file = do
-    decls <- many decl
-    eof
-    pure decls
+lang :: LanguageDef st
+lang = LanguageDef { commentStart = "{-"
+                   , commentEnd = "-}"
+                   , commentLine = "--"
+                   , nestedComments = True
+                   , identStart = letter <|> char '_'
+                   , identLetter = alphaNum <|> char '_'
+                   , opStart = oneOf ":!#$%&*+./<=>?@\\^|-~"
+                   , opLetter = oneOf ":!#$%&*+./<=>?@\\^|-~"
+                   , reservedNames = ["let, in", "module", "interface", "implements", "where"]
+                   , reservedOpNames = ["@", ":", "\\", ".", "->", "="]
+                   , caseSensitive = True
+                   }
 
-decl :: GenParser Char st Decl
-decl = do
-    n <- parseIdent
-    spaces
-    char '='
-    spaces
-    e <- parseExpr
-    pure $ Decl n e
+tokParse :: TokenParser st
+tokParse = makeTokenParser lang
 
-parseIdent :: GenParser Char st Ident
+parseDecl :: Parsec String st Decl
+parseDecl = do
+    ident <- parseIdent
+    reservedOp tokParse "="
+    expr <- parseExpr
+    pure $ Decl ident expr
+
+parseIdent :: Parsec String st Ident
 parseIdent = do
-    n <- parseName
-    spaces
-    char ':'
-    spaces
+    name <- identifier tokParse
+    reservedOp tokParse ":"
     ty <- parseType
-    pure $ Id n ty
+    pure $ Id name ty
 
-parseName :: GenParser Char st String
-parseName = do
-    c0 <- letter
-    rest <- many alphaNum
-    pure $ c0:rest
+parseType :: Parsec String st Type
+parseType = chainr1 (parens tokParse parseType <|> parseType_Int) (reservedOp tokParse "->" >> pure TyFun)
 
-parseType :: GenParser Char st Type
-parseType = try parseType_TyFun <|> try parseType_Parens <|> try parseType_TyInt
-
-parseType_Parens :: GenParser Char st Type
-parseType_Parens = do
-    char '('
-    ty <- parseType
-    char ')'
-    pure $ ty
-
-parseType_TyInt :: GenParser Char st Type
-parseType_TyInt = do
-    parseName
+parseType_Int :: Parsec String st Type
+parseType_Int = do
+    tyIdent <- identifier tokParse
     pure TyInt
 
-parseType_TyFun :: GenParser Char st Type
-parseType_TyFun = do
-    l <- try parseType_Parens <|> try parseType_TyInt
-    spaces
-    string "->"
-    spaces
-    r <- parseType
-    pure $ TyFun l r
+parseExpr :: Parsec String st (Expr Ident)
+parseExpr = parseExpr_Let <|> parseExpr_Aps
 
-parseExpr :: GenParser Char st (Expr Ident)
-parseExpr = do
-    es <- sepBy1 (try parseExpr_Parens <|> try parseExpr_Lam <|> try parseExpr_Var <|> try parseExpr_Lit) (spaces >> char '@' >> spaces)
-    pure $ foldl1 (:@) es
+parseExpr_Aps :: Parsec String st (Expr Ident)
+parseExpr_Aps = chainl1 (parens tokParse parseExpr <|> parseExpr_Lam <|> parseExpr_Var <|> parseExpr_Lit) (reservedOp tokParse "@" >> pure (:@))
 
-parseExpr_Parens :: GenParser Char st (Expr Ident)
-parseExpr_Parens = do
-    char '('
-    e <- parseExpr
-    char ')'
-    pure e
+parseExpr_Let :: Parsec String st (Expr Ident)
+parseExpr_Let = do
+    reserved tokParse "let"
+    defs <- commaSep tokParse (unDecl <$> parseDecl)
+    reserved tokParse "in"
+    expr <- parseExpr_Aps
+    pure $ Let True defs expr
 
-parseExpr_Lit :: GenParser Char st (Expr Ident)
-parseExpr_Lit = do
-    n <- many digit
-    pure $ L $ read n
-
-parseExpr_Var :: GenParser Char st (Expr Ident)
-parseExpr_Var = fmap V parseIdent
-
-parseExpr_Lam :: GenParser Char st (Expr Ident)
+parseExpr_Lam :: Parsec String st (Expr Ident)
 parseExpr_Lam = do
-    char '\\'
-    spaces
-    binder <- parseIdent
-    spaces
-    char '.'
-    spaces
-    e <- parseExpr
-    pure $ Lam binder e
+    reservedOp tokParse "\\"
+    ident <- parseIdent
+    reservedOp tokParse "."
+    expr <- parseExpr
+    pure $ Lam ident expr
 
---parseExpr_Ap :: GenParser Char st (Expr Ident -> Expr Ident -> Expr Ident)
---parseExpr_Ap = do
---    char '@'
+parseExpr_Var :: Parsec String st (Expr Ident)
+parseExpr_Var = V <$> parseIdent
+
+parseExpr_Lit :: Parsec String st (Expr Ident)
+parseExpr_Lit = (L . fromInteger) <$> integer tokParse
