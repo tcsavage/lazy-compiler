@@ -1,4 +1,4 @@
 i : Int -> Int = \x:Int. x:Int
 k : Int -> Int -> Int = \x:Int. \y:Int. x:Int
 
-main : Int = add:Int->Int @ 5 @ 2
+main : Int = mul:Int->Int->Int @ 10 @ 6

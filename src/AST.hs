@@ -43,6 +43,7 @@ data PrimFun = PrimBinOp PrimBinOp
              deriving (Eq,Ord,Show,Read)
 
 data PrimBinOp = PrimAdd
+               | PrimMul
                deriving (Eq,Ord,Show,Read)
 
 evalPrimBinOp :: PrimBinOp -> Int -> Int -> Expr a

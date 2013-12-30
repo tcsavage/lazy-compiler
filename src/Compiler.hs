@@ -15,7 +15,7 @@ import AST
 import GMachine
 
 compile :: Module -> [(String, [Instruction String], Int)]
-compile mod = map compileTopLevel (_tlDecls mod ++ [(Id "add" (TyInt ~> TyInt), PrimFun $ PrimBinOp PrimAdd)])
+compile mod = map compileTopLevel (_tlDecls mod ++ [(Id "add" (TyInt ~> TyInt ~> TyInt), PrimFun $ PrimBinOp PrimAdd), (Id "mul" (TyInt ~> TyInt ~> TyInt), PrimFun $ PrimBinOp PrimMul)])
 
 compileTopLevel :: (Ident, Expr Ident) -> (String, [Instruction String], Int)
 compileTopLevel (ident, expr) = (name ident, sc expr, getArity expr)
@@ -85,6 +85,7 @@ compilePrimOp (PrimBinOp op) env = [Push 1, Eval, Push 1, Eval, compilePrimBinOp
 
 compilePrimBinOp :: PrimBinOp -> VarMap -> Instruction String
 compilePrimBinOp PrimAdd env = Add
+compilePrimBinOp PrimMul env = Mul
 
 argOffset :: Int -> VarMap -> VarMap
 argOffset n env = [(i, n+m) | (i, m) <- env]

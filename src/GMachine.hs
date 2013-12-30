@@ -13,6 +13,7 @@ data Instruction a = PushGlobal a
                    | Unwind
                    | Eval
                    | Add
+                   | Mul
                    deriving (Show, Eq)
 
 instance Functor Instruction where

@@ -262,6 +262,7 @@ dispatch (Pop n) = pop n
 dispatch Unwind = unwind
 dispatch Eval = eval
 dispatch Add = primArith2 (+)
+dispatch Mul = primArith2 (*)
 
 -- | Lookup the address of the given global and push it onto the stack.
 pushGlobal :: Name -> GM ()
