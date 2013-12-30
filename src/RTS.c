@@ -3,9 +3,15 @@
 #include "RTS.h"
 
 // Stack environment.
+typedef struct Stack
+{
+    Node **data;
+    int head;
+    int size;
+} Stack;
+
 int stackSize = 256;
-Node **stack;
-int stackHead;
+Stack *activeStack;
 
 // Instruction environment.
 Instruction *currInstBase;
@@ -19,19 +25,52 @@ void printNode(Node *node);
 
 void doUnwind(Instruction *ins);
 
+// Create a new, empty stack.
+Stack *mkStack(int size) {
+    Stack *stack = (Stack *) malloc(sizeof(Stack));
+    stack->data = (Node **) malloc(size);
+    stack->head = 0;
+    stack->size = size;
+    return stack;
+}
+
+// Clone an existing stack and its contents. Stack data is duplicated but the heap objects are not.
+Stack *cloneStack(Stack *base) {
+    Stack *stack = mkStack(base->size);
+    int i;
+    for (i = 0; i < base->head; ++i) {
+        stack->data[i] = base->data[i];
+    }
+    stack->head = base->head;
+    return stack;
+}
+
+// Make a stack the currently active one. Returns pointer to the old one.
+Stack *bindStack(Stack *stack) {
+    Stack *old;
+    activeStack = stack;
+    return old;
+}
+
+// Frees a stack (but not items pointed to by stack items).
+void freeStack(Stack *stack) {
+    free(stack->data);
+    free(stack);
+}
+
 void sPush(Node *node) {
     // printf("Pushing... ");
     // printNode(node);
-    stack[stackHead] = node;
-    stackHead++;
+    activeStack->data[activeStack->head] = node;
+    activeStack->head++;
 }
 
 Node *sPop() {
     // printf("Pop\n");
-    if (stackHead > 0) {
-        stackHead--;
-        Node *tmp = stack[stackHead];
-        stack[stackHead] = NULL;
+    if (activeStack->head > 0) {
+        activeStack->head--;
+        Node *tmp = activeStack->data[activeStack->head];
+        activeStack->data[activeStack->head] = NULL;
         return tmp;
     } else {
         return NULL;
@@ -39,8 +78,8 @@ Node *sPop() {
 }
 
 Node *sPeek() {
-    if (stackHead > 0) {
-        return stack[stackHead-1];
+    if (activeStack->head > 0) {
+        return activeStack->data[activeStack->head-1];
     } else {
         return NULL;
     }
@@ -51,12 +90,12 @@ Node *sIndex(int i) {
     if (i < 0) {
         i = 0;
     }
-    return stack[stackHead-i-1];
+    return activeStack->data[activeStack->head-i-1];
 }
 
 // Replace the nth item in the stack.
 void sReplace(int i, Node *n) {
-    stack[stackHead-i-1] = n;
+    activeStack->data[activeStack->head-i-1] = n;
 }
 
 void printNode(Node *node) {
@@ -316,8 +355,8 @@ void doUnwind(Instruction *ins) {
 
 int run(Instruction *insStart, Node *globals[]) {
     // Init stack.
-    stack = (Node **) malloc(stackSize);
-    stackHead = 0;
+    Stack *mainStack = mkStack(stackSize);
+    bindStack(mainStack);
 
     globalTable = globals;
     currInstBase = insStart;
@@ -331,6 +370,6 @@ int run(Instruction *insStart, Node *globals[]) {
 
     // Cleanup.
     pdfStack();
-    free(stack);
+    freeStack(mainStack);
     return 0;
 }
