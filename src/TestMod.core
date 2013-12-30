@@ -1,5 +1,5 @@
-i : Int -> Int = \x:Int.x:Int
-k : Int -> Int -> Int = \x:Int.\y:Int.x:Int
-s : (Int -> Int -> Int) -> (Int -> Int) -> Int -> Int = \x:Int->Int->Int.\y:Int->Int.\z:Int. x:Int->Int->Int @ z:Int @ (y:Int->Int @ z:Int)
+i : Int -> Int = \x:Int. x:Int
+k : Int -> Int -> Int = \x:Int. \y:Int. x:Int
+s : (Int -> Int -> Int) -> (Int -> Int) -> Int -> Int = \x:Int->Int->Int. \y:Int->Int. \z:Int. x:Int->Int->Int @ z:Int @ (y:Int->Int @ z:Int)
 
 main : Int = s:(Int -> Int -> Int) -> (Int -> Int) -> Int -> Int @ k:Int->Int->Int @ i:Int->Int @ 5
