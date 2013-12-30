@@ -151,6 +151,15 @@ getArg :: Node -> Addr
 getArg (NAp f x) = x
 getArg _ = error "Tried to get argument of non-application node."
 
+-- | Rearrange the stack.
+rearrange :: Int -> GM ()
+rearrange n = do
+    s0 <- get
+    let heap = gmHeap s0
+    let as = gmStack s0
+    as' <- mapM (fmap getArg . hDeref) $ tail as
+    put $ s0 { gmStack = take n as' ++ drop n as }
+
 -- | Run the machine witht he given initial state. Produce a list of states.
 eval :: GMState -> IO [GMState]
 eval state0 = (state0 :) <$> states
@@ -209,8 +218,7 @@ pushInt n = do
 push :: Int -> GM ()
 push x = do
     stack0 <- gmStack <$> get
-    node <- hDeref (stack0 !! (x+1))
-    stackPush $ getArg node
+    stackPush (stack0 !! x)
 
 -- | Pop the tow two addresses from the stack. Allocate a new application node on the heap using those two addresses, and push the new node's adderss onto the stack.
 mkAp :: GM ()
@@ -228,10 +236,11 @@ slide n = do
     stackPush x
 
 alloc :: Int -> GM ()
-alloc n = undefined
+alloc n = replicateM_ n allocNodeAndPush
     where
-        allocNodes :: Int -> GMHeap -> (GMHeap, [Addr])
-        allocNodes 0 heap = (heap, [])
+        allocNodeAndPush = do
+            addr <- hAlloc $ NInd heapNull
+            stackPush addr
 
 update :: Int -> GM ()
 update 0 = pure ()
@@ -259,7 +268,9 @@ unwind = do
             size <- stackSize
             case (size - 1) < n of
                 True -> error "Unwinding with too few arguments."
-                False -> setCode code
+                False -> do
+                    rearrange n
+                    setCode code
         newState (NInd addr) = do
             stackPop
             stackPush addr
