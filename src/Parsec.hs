@@ -19,7 +19,7 @@ lang = LanguageDef { commentStart = "{-"
                    , identLetter = alphaNum <|> char '_'
                    , opStart = oneOf ":!#$%&*+./<=>?@\\^|-~"
                    , opLetter = oneOf ":!#$%&*+./<=>?@\\^|-~"
-                   , reservedNames = ["let, in", "module", "interface", "implements", "where"]
+                   , reservedNames = ["let", "letrec", "in", "module", "interface", "implements", "where"]
                    , reservedOpNames = ["@", ":", "\\", ".", "->", "="]
                    , caseSensitive = True
                    }
@@ -57,11 +57,11 @@ parseExpr_Aps = chainl1 (parens tokParse parseExpr <|> parseExpr_Lam <|> parseEx
 
 parseExpr_Let :: Parsec String st (Expr Ident)
 parseExpr_Let = do
-    reserved tokParse "let"
+    rec <- try (reserved tokParse "letrec" >> pure True) <|> try (reserved tokParse "let" >> pure False)
     defs <- commaSep tokParse (unDecl <$> parseDecl)
     reserved tokParse "in"
     expr <- parseExpr_Aps
-    pure $ Let True defs expr
+    pure $ Let rec defs expr
 
 parseExpr_Lam :: Parsec String st (Expr Ident)
 parseExpr_Lam = do
