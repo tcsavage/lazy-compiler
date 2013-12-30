@@ -19,7 +19,7 @@ data Expr a = V a  -- Variable
             | L Int  -- Integer literal
             | Expr a :@ Expr a  -- Application
             | Lam a (Expr a)  -- Lambda
-            | Let [(Ident, Expr a)] (Expr a)  -- Recursive let binding
+            | Let Bool [(Ident, Expr a)] (Expr a)  -- Recursive let binding
             | PrimFun PrimFun  -- Primitive function
             deriving (Eq,Ord,Show,Read)
 
