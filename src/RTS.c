@@ -46,6 +46,7 @@ Node *sPeek() {
     }
 }
 
+// Get the nth item in the stack.
 Node *sIndex(int i) {
     if (i < 0) {
         i = 0;
@@ -53,6 +54,7 @@ Node *sIndex(int i) {
     return stack[stackHead-i-1];
 }
 
+// Replace the nth item in the stack.
 void sReplace(int i, Node *n) {
     stack[stackHead-i-1] = n;
 }
@@ -212,6 +214,7 @@ Node *getArg(Node *ap) {
 }
 
 void decodeAndRun(Instruction *ins) {
+    int i;
     switch (ins->instType) {
         case INS_END:
             printf("Attempted to run END instruction. This shouldn't ever happen.\n");
@@ -227,8 +230,7 @@ void decodeAndRun(Instruction *ins) {
             break;
         case INS_PUSH:
             ;
-            Node *stackItem = sIndex(ins->arg+1);
-            Node *arg = getArg(stackItem);
+            Node *arg = sIndex(ins->arg);
             sPush(arg);
             break;
         case INS_MKAP:
@@ -236,6 +238,20 @@ void decodeAndRun(Instruction *ins) {
             Node *a = sPop();
             Node *b = sPop();
             sPush(mkNodeAp(a, b));
+            break;
+        case INS_SLIDE:
+            ;
+            Node *x = sPop();
+            for (i = 0; i < ins->arg; ++i) {
+                sPop();
+            }
+            sPush(x);
+            break;
+        case INS_ALLOC:
+            ;
+            for (i = 0; i < ins->arg; ++i) {
+                sPush(mkNodeInd(NULL));
+            }
             break;
         case INS_UPDATE:
             ;
@@ -246,7 +262,6 @@ void decodeAndRun(Instruction *ins) {
             break;
         case INS_POP:
             ;
-            int i;
             for (i = 0; i < ins->arg; ++i) {
                 sPop();
             }
@@ -256,6 +271,15 @@ void decodeAndRun(Instruction *ins) {
             break;
         default:
             printf("Unknown instruction.\n");
+    }
+}
+
+// Rearrange the stack.
+void rearrange(int n) {
+    int i;
+    for (i = 0; i < n; ++i) {
+        Node *n = sIndex(i+1);
+        sReplace(i, getArg(n));
     }
 }
 
@@ -276,6 +300,7 @@ void doUnwind(Instruction *ins) {
             ;
             // printf("GLOBAL\n");
             NodeGlobal *global = (NodeGlobal *) head->addr;
+            rearrange(global->arity);
             currInstBase = global->code;
             currInstOffset = -1;
             break;
