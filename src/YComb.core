@@ -1,0 +1,3 @@
+Y:(Int->Int)->Int = \f:(Int->Int). let x:Int = f:(Int->Int) @ x:Int in x:Int
+
+main:Int = 5

@@ -1,0 +1,6 @@
+i : Int -> Int = \x:Int. x:Int
+k : Int -> Int -> Int = \x:Int. \y:Int. x:Int
+
+always5 : Int -> Int = k:Int -> Int -> Int @ 5
+
+main : Int = always5:Int->Int @ 2
