@@ -57,6 +57,27 @@ c (V ident) env = case lookup (name ident) env of
     Nothing -> [PushGlobal $ name ident]
 c (L n) _ = [PushInt n]
 c (l :@ r) env = c r env ++ c l (argOffset 1 env) ++ [MkAp]
+c (Let False decls expr) env = compileLet decls env ++ c expr env' ++ [Slide n]  -- Non-rec.
+    where
+        n = length decls
+        env' = compileArgs decls env
+c (Let True decls expr) env = [Alloc n] ++ compileLetrec decls env' ++ c expr env' ++ [Slide n]  -- Rec.
+    where
+        n = length decls
+        env' = compileArgs decls env
+
+compileLet :: [(Ident, Expr Ident)] -> VarMap -> [Instruction String]
+compileLet [] _ = []
+compileLet ((ident, expr):defs) env = c expr env ++ compileLet defs (argOffset 1 env)
+
+compileLetrec :: [(Ident, Expr Ident)] -> VarMap -> [Instruction String]
+compileLetrec [] _ = []
+compileLetrec ((ident, expr):defs) env = c expr env ++ [Update $ length defs]
+
+compileArgs :: [(Ident, Expr Ident)] -> VarMap -> VarMap
+compileArgs defs env = zip (map (name . fst) defs) [n-1, n-2 .. 0] ++ argOffset n env
+    where
+        n = length defs
 
 argOffset :: Int -> VarMap -> VarMap
 argOffset n env = [(i, n+m) | (i, m) <- env]
