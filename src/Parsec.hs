@@ -1,9 +1,11 @@
 module Parsec where
 
 import Control.Applicative (pure, (<*>), (*>), (<$>))
+import Control.Monad
 import Text.Parsec
 import Text.Parsec.Combinator
 import Text.Parsec.Token
+import Text.Printf
 
 import AST
 
@@ -19,7 +21,7 @@ lang = LanguageDef { commentStart = "{-"
                    , identLetter = alphaNum <|> char '_'
                    , opStart = oneOf ":!#$%&*+./<=>?@\\^|-~"
                    , opLetter = oneOf ":!#$%&*+./<=>?@\\^|-~"
-                   , reservedNames = ["let", "letrec", "in", "module", "interface", "implements", "where"]
+                   , reservedNames = ["let", "letrec", "in", "module", "interface", "implements", "where", "Add#", "Mul#"]
                    , reservedOpNames = ["@", ":", "\\", ".", "->", "="]
                    , caseSensitive = True
                    }
@@ -53,7 +55,7 @@ parseExpr :: Parsec String st (Expr Ident)
 parseExpr = parseExpr_Let <|> parseExpr_Aps
 
 parseExpr_Aps :: Parsec String st (Expr Ident)
-parseExpr_Aps = chainl1 (parens tokParse parseExpr <|> parseExpr_Lam <|> parseExpr_Var <|> parseExpr_Lit) (reservedOp tokParse "@" >> pure (:@))
+parseExpr_Aps = chainl1 (parens tokParse parseExpr <|> parseExpr_Lam <|> parseExpr_PrimOp <|> parseExpr_Var <|> parseExpr_Lit) (reservedOp tokParse "@" >> pure (:@))
 
 parseExpr_Let :: Parsec String st (Expr Ident)
 parseExpr_Let = do
@@ -62,6 +64,14 @@ parseExpr_Let = do
     reserved tokParse "in"
     expr <- parseExpr_Aps
     pure $ Let rec defs expr
+
+parseExpr_PrimOp :: Parsec String st (Expr Ident)
+parseExpr_PrimOp = parseOpName <$> choice primOpNames
+  where
+    primOpNames = map (lexeme tokParse . string) ["Add#", "Mul#"]
+    parseOpName "Add#" = PrimFun $ PrimBinOp PrimAdd
+    parseOpName "Mul#" = PrimFun $ PrimBinOp PrimMul
+    parseOpName n = error $ printf "No parse def for primop `%n`." n
 
 parseExpr_Lam :: Parsec String st (Expr Ident)
 parseExpr_Lam = do

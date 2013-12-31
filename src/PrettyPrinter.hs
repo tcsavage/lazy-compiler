@@ -1,4 +1,4 @@
-module PrettyPrinter (pp) where
+module PrettyPrinter where
 
 import Data.List
 import Text.Printf
@@ -24,3 +24,11 @@ ppExpr (V ident) = ppIdent ident
 ppExpr (Lam b e) = printf "\\%s. %s" (ppIdent b) (ppExpr e)
 ppExpr (l :@ r) = printf "(%s @ %s)" (ppExpr l) (ppExpr r)
 ppExpr (Let rec ds e) = printf "let%s %s in %s" (if rec then "rec" else "") (intercalate ", " $ map ppDecl ds) (ppExpr e)
+ppExpr (PrimFun pf) = ppPrimFun pf
+
+ppPrimFun :: PrimFun -> String
+ppPrimFun (PrimBinOp op) = ppPrimBinOp op
+
+ppPrimBinOp :: PrimBinOp -> String
+ppPrimBinOp PrimAdd = "Add#"
+ppPrimBinOp PrimMul = "Mul#"

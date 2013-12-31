@@ -15,11 +15,12 @@ import GMachine.Interpreter
 import GMachine.ViaC
 import Parsec
 import PrettyPrinter
+import TypeCheck
 
 main :: IO ()
 main = do
     [backend, srcFile] <- getArgs
-    mod <- (Module srcFile . genAST) <$> readFile srcFile
+    mod <- (checkModule . Module srcFile . genAST) <$> readFile srcFile
     case backend of
         "-bviac" -> writeFile (srcFile++".c") $ generateC $ compile mod
         "-bpp" -> putStrLn $ pp mod
