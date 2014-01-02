@@ -11,11 +11,27 @@ typedef struct Stack
 } Stack;
 
 int stackSize = 256;
-Stack *activeStack;
 
-// Instruction environment.
-Instruction *currInstBase;
-int currInstOffset = 0;
+// Dump.
+typedef struct Env
+{
+    Instruction *code;
+    int offset;
+    Stack *stack;
+} Env;
+
+typedef struct Dump
+{
+    Env **data;
+    int head;
+    int size;
+} Dump;
+
+int dumpSize = 256;;
+Dump *dump;
+
+Env *activeEnv;
+Stack *activeStack;  // Should always point to `activeEnv->stack`.
 
 Node **globalTable;
 
@@ -43,13 +59,6 @@ Stack *cloneStack(Stack *base) {
     }
     stack->head = base->head;
     return stack;
-}
-
-// Make a stack the currently active one. Returns pointer to the old one.
-Stack *bindStack(Stack *stack) {
-    Stack *old;
-    activeStack = stack;
-    return old;
 }
 
 // Frees a stack (but not items pointed to by stack items).
@@ -96,6 +105,66 @@ Node *sIndex(int i) {
 // Replace the nth item in the stack.
 void sReplace(int i, Node *n) {
     activeStack->data[activeStack->head-i-1] = n;
+}
+
+Env *mkEnv() {
+    Env * e = (Env *) malloc(sizeof(Env));
+    return e;
+}
+
+void freeEnv(Env *e) {
+    freeStack(e->stack);
+    free(e);
+}
+
+Env *bindEnv(Env *e) {
+    Env *old = activeEnv;
+    activeEnv = e;
+    activeStack = activeEnv->stack;
+    return old;
+}
+
+// Create a new, empty dump.
+Dump *mkDump(int size) {
+    Dump *d = (Dump *) malloc(sizeof(Dump));
+    d->data = (Env **) malloc(size);
+    d->head = 0;
+    d->size = size;
+    return d;
+}
+
+void dumpPush() {
+    // Pop head of old stack.
+    Node *head = sPop();
+
+    // Build new environment.
+    Env *e = mkEnv();
+    e->stack = mkStack(activeStack->size);
+    e->code = (Instruction *) malloc(2*sizeof(Instruction));
+    e->code[0] = insUnwind();
+    e->code[1] = insEnd();
+    e->offset = -1;
+
+    // Bind new environment and push old head onto stack.
+    Env *old = bindEnv(e);
+    sPush(head);
+
+    // Push old head onto dump.
+    dump->data[dump->head] = old;
+    ++dump->head;
+}
+
+void dumpRestore() {
+    if (dump->head > 0) {
+        Env *old = activeEnv;
+        Node *head = sPeek();
+        Env *e = dump->data[dump->head-1];
+        bindEnv(e);
+        dump->data[dump->head-1] = NULL;
+        --dump->head;
+        sPush(head);
+        freeEnv(old);
+    }
 }
 
 void printNode(Node *node) {
@@ -242,6 +311,27 @@ Instruction insUnwind() {
     return ins;
 }
 
+Instruction insEval() {
+    Instruction ins;
+    ins.instType = INS_EVAL;
+    ins.arg = 0;
+    return ins;
+}
+
+Instruction insAdd() {
+    Instruction ins;
+    ins.instType = INS_ADD;
+    ins.arg = 0;
+    return ins;
+}
+
+Instruction insMul() {
+    Instruction ins;
+    ins.instType = INS_MUL;
+    ins.arg = 0;
+    return ins;
+}
+
 Node *getArg(Node *ap) {
     if (ap->nodeType == NODE_AP) {
         NodeAp *apn = (NodeAp *) ap->addr;
@@ -308,8 +398,44 @@ void decodeAndRun(Instruction *ins) {
         case INS_UNWIND:
             doUnwind(ins);
             break;
+        case INS_EVAL:
+            dumpPush();
+            break;
+        case INS_ADD:
+            ;
+            Node *l1 = sPop();
+            Node *r1 = sPop();
+            if (l1->nodeType == NODE_NUM) {
+                NodeInt *li1 = (NodeInt *) l1->addr;
+                if (r1->nodeType == NODE_NUM) {
+                    NodeInt *ri1 = (NodeInt *) r1->addr;
+                    sPush(mkNodeInt(li1->value + ri1->value));
+                } else {
+                    printf("Tried to perform addition on non-integer node.\n");
+                }
+            } else {
+                printf("Tried to perform addition on non-integer node.\n");
+            }
+            break;
+        case INS_MUL:
+            ;
+            Node *l2 = sPop();
+            Node *r2 = sPop();
+            if (l2->nodeType == NODE_NUM) {
+                NodeInt *li2 = (NodeInt *) l2->addr;
+                if (r2->nodeType == NODE_NUM) {
+                    NodeInt *ri2 = (NodeInt *) r2->addr;
+                    sPush(mkNodeInt(li2->value * ri2->value));
+                } else {
+                    printf("Tried to perform multiplication on non-integer node.\n");
+                }
+            } else {
+                printf("Tried to perform multiplication on non-integer node.\n");
+            }
+            break;
         default:
             printf("Unknown instruction.\n");
+            exit(1);
     }
 }
 
@@ -326,6 +452,9 @@ void doUnwind(Instruction *ins) {
     // printf("Unwinding...\n");
     Node *head = sPeek();
     switch (head->nodeType) {
+        case NODE_NUM:
+            dumpRestore();
+            break;
         case NODE_AP:
             // printf("AP.\n");
             while (head->nodeType == NODE_AP) {
@@ -340,8 +469,8 @@ void doUnwind(Instruction *ins) {
             // printf("GLOBAL\n");
             NodeGlobal *global = (NodeGlobal *) head->addr;
             rearrange(global->arity);
-            currInstBase = global->code;
-            currInstOffset = -1;
+            activeEnv->code = global->code;
+            activeEnv->offset = -1;
             break;
         case NODE_IND:
             ;
@@ -354,22 +483,26 @@ void doUnwind(Instruction *ins) {
 }
 
 int run(Instruction *insStart, Node *globals[]) {
-    // Init stack.
-    Stack *mainStack = mkStack(stackSize);
-    bindStack(mainStack);
+    // Init dump.
+    dump = mkDump(stackSize);
+
+    // Init env.
+    activeEnv = mkEnv();
+    activeStack = mkStack(stackSize);
+    activeEnv->stack = activeStack;
+    activeEnv->code = insStart;
+    activeEnv->offset = 0;
 
     globalTable = globals;
-    currInstBase = insStart;
-    currInstOffset = 0;
 
-    while (currInstBase[currInstOffset].instType != INS_END) {
-        // printf("%d : %d\n", currInstBase[currInstOffset].instType, currInstBase[currInstOffset].arg);
-        decodeAndRun(&currInstBase[currInstOffset]);
-        currInstOffset++;
+    while (activeEnv->code[activeEnv->offset].instType != INS_END) {
+        // printf("%d : %d\n", activeEnv->code[activeEnv->offset].instType, activeEnv->code[activeEnv->offset].arg);
+        decodeAndRun(&activeEnv->code[activeEnv->offset]);
+        activeEnv->offset++;
     }
 
     // Cleanup.
     pdfStack();
-    freeStack(mainStack);
+    freeEnv(activeEnv);
     return 0;
 }
