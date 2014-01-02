@@ -28,6 +28,7 @@ instance Functor Instruction where
     fmap _ Unwind = Unwind
     fmap _ Eval = Eval
     fmap _ Add = Add
+    fmap _ Mul = Mul
 
 initialCode :: [Instruction String]
 initialCode = [PushGlobal "main", Eval]

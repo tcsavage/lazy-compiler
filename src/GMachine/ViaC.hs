@@ -1,6 +1,7 @@
 module GMachine.ViaC where
 
 import Data.List
+import Data.List.Utils
 import Data.Maybe
 import System.IO.Unsafe
 import Text.Printf
@@ -19,7 +20,8 @@ renameGlobals globals = map doRename globals
     where
         names = map (\(name, ins, arity) -> name) globals
         mapper name = fromMaybe (error $ printf "Unknown global `%s`\n" name) $ lookup name $ zip names [0..]
-        doRename (name, code, arity) = (name, mapper name, map (fmap mapper) code, arity)
+        removeHash = replace "#" "_PRIM_"
+        doRename (name, code, arity) = (removeHash name, mapper name, map (fmap mapper) code, arity)
 
 translateIns :: Instruction Int -> String
 translateIns (PushGlobal n) = printf "insPushGlobal(%d)" n

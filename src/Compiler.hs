@@ -13,12 +13,18 @@ import "mtl" Control.Monad.State
 
 import AST
 import GMachine
+import PrettyPrinter
 
 compile :: Module -> [(String, [Instruction String], Int)]
-compile mod = map compileTopLevel (_tlDecls mod ++ [(Id "add" (TyInt ~> TyInt ~> TyInt), PrimFun $ PrimBinOp PrimAdd), (Id "mul" (TyInt ~> TyInt ~> TyInt), PrimFun $ PrimBinOp PrimMul)])
+compile mod = map compileTopLevel (_tlDecls mod) ++ primOps
 
 compileTopLevel :: (Ident, Expr Ident) -> (String, [Instruction String], Int)
 compileTopLevel (ident, expr) = (name ident, sc expr, getArity expr)
+
+primOps :: [(String, [Instruction String], Int)]
+primOps = map build [PrimBinOp PrimAdd, PrimBinOp PrimMul]
+    where
+        build pf = (ppPrimFun pf, compilePrimOp pf, getArity $ PrimFun pf)
 
 type VarMap = [(String, Int)]
 
@@ -65,7 +71,7 @@ c (Let True decls expr) env = [Alloc n] ++ compileLetrec decls env' ++ c expr en
     where
         n = length decls
         env' = compileArgs decls env
-c (PrimFun pf) env = compilePrimOp pf env
+c (PrimFun pf) env = [PushGlobal (ppPrimFun pf)]
 
 compileLet :: [(Ident, Expr Ident)] -> VarMap -> [Instruction String]
 compileLet [] _ = []
@@ -80,12 +86,12 @@ compileArgs defs env = zip (map (name . fst) defs) [n-1, n-2 .. 0] ++ argOffset 
     where
         n = length defs
 
-compilePrimOp :: PrimFun -> VarMap -> [Instruction String]
-compilePrimOp (PrimBinOp op) env = [Push 1, Eval, Push 1, Eval, compilePrimBinOp op env, Update 2, Pop 2, Unwind]
-
-compilePrimBinOp :: PrimBinOp -> VarMap -> Instruction String
-compilePrimBinOp PrimAdd env = Add
-compilePrimBinOp PrimMul env = Mul
-
 argOffset :: Int -> VarMap -> VarMap
 argOffset n env = [(i, n+m) | (i, m) <- env]
+
+compilePrimOp :: PrimFun -> [Instruction String]
+compilePrimOp (PrimBinOp op) = [Push 1, Eval, Push 1, Eval, compilePrimBinOp op, Update 2, Pop 2, Unwind]
+
+compilePrimBinOp :: PrimBinOp -> Instruction String
+compilePrimBinOp PrimAdd = Add
+compilePrimBinOp PrimMul = Mul
