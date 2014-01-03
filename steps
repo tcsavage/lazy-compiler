@@ -1,1 +1,0 @@
-[Source] >-lexer-> [tokens] >-parser-> [AST] >-compiler-> [G-machine instructions] >-code generator-> [LLVM AST] >-llvm-general-> [IR] >-llc-> [bitcode] >-lli-> [ASM] >-gcc-> [native binary]
