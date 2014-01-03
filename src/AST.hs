@@ -10,7 +10,6 @@ import Data.Foldable as F
 import Data.List
 import Data.Monoid
 import Data.Traversable as T
-import Prelude.Extras
 
 infixl 9 :@
 infixr 9 ~>

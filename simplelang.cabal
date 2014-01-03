@@ -8,14 +8,22 @@ cabal-version:       >=1.8
 
 executable simplelang
   main-is:             Main.hs
+  other-modules:       AST
+                       Compiler
+                       GMachine
+                       GMachine.Interpreter
+                       GMachine.ViaC
+                       Parsec
+                       PrettyPrinter
+                       TypeCheck
   build-depends:       base ==4.6.*,
-                       bound ==0.9.*,
                        lens ==3.10.*,
                        transformers ==0.3.*,
                        containers ==0.5.*,
-                       llvm-general ==3.3.*,
-                       llvm-general-pure ==3.3.*,
-                       prelude-extras ==0.3.*,
                        process ==1.1.*,
-                       mtl ==2.1.*
+                       mtl ==2.1.*,
+                       parsec ==3.*,
+                       MissingH ==1.*,
+                       pretty-show ==1.6.1,
+                       bytestring ==0.10.*
   hs-source-dirs:      src

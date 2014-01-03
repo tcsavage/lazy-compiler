@@ -1,11 +1,7 @@
 {-# LANGUAGE PackageImports #-}
 {- Compile a core program to Gcode. -}
 module Compiler where
-
-import Bound
-import Bound.Name hiding (name)
-import qualified Bound.Name (name)
-import Bound.Scope
+    
 import Control.Applicative
 import Control.Monad
 import "mtl" Control.Monad.Reader
