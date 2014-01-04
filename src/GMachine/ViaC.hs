@@ -6,13 +6,17 @@ import Data.Maybe
 import System.IO.Unsafe
 import Text.Printf
 
+import Paths_simplelang
+
 import GMachine
 
 generateC :: [(String, [Instruction String], Int)] -> String
 generateC globals = printf template (length globals) (concatMap translateGlobal $ renameGlobals globals)
 
 template :: String
-template = unsafePerformIO $ readFile "template.c"
+template = unsafePerformIO $ do
+    template <- getDataFileName "template.c"
+    readFile template
 
 -- | Give each global a numeric offset and replace instances of the number with the offset instead.
 renameGlobals :: [(String, [Instruction String], Int)] -> [(String, Int, [Instruction Int], Int)]
