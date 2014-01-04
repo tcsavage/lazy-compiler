@@ -220,28 +220,28 @@ primArith2 :: (Int -> Int -> Int) -> GM ()
 primArith2 = primOp2 boxInteger unboxInteger
 
 -- | Run the machine witht he given initial state. Produce a list of states.
---eval :: GMState -> IO [GMState]
---eval state0 = (state0 :) <$> states
---    where
---        states = if stateFinal state0 then pure [] else (eval =<< step state0)
+runGCode :: GMState -> IO [GMState]
+runGCode state0 = (state0 :) <$> states
+    where
+        states = if stateFinal state0 then pure [] else (runGCode =<< step state0)
 
 -- | Run the machine with the given initial state and print each state at each step.
-eval_ :: GMState -> IO ()
-eval_ s0
+runGCodeVerbose :: GMState -> IO ()
+runGCodeVerbose s0
     | stateFinal s0 = putStrLn "Done."
     | otherwise = do
         s1 <- step s0
         putStrLn $ ppShow s1
-        eval_ s1
+        runGCodeVerbose s1
 
 -- | Run the machine with the given initial state and return its final value (or 'Nothing' if not an integer node.)
---evalToValue :: GMState -> IO (Maybe Int)
---evalToValue s0 = do
---    sn <- last <$> eval s0
---    pure $ do
---        head <- listToMaybe $ gmStack sn
---        (NNum r) <- M.lookup head $ gmHeap sn
---        pure r
+runGCodeToValue :: GMState -> IO (Maybe Int)
+runGCodeToValue s0 = do
+    sn <- last <$> runGCode s0
+    pure $ do
+        head <- listToMaybe $ gmStack sn
+        (NNum r) <- M.lookup head $ gmHeap sn
+        pure r
 
 -- | Step the machine.
 step :: GMState -> IO GMState

@@ -25,13 +25,20 @@ main = do
         "-bviac" -> writeFile (srcFile++".c") $ generateC $ compile mod
         "-bpp" -> putStrLn $ pp mod
         "-bppgc" -> putStrLn $ ppShow $ compile mod
+        "-bi" -> do
+            s0 <- mkState $ compile mod
+            out <- runGCodeToValue s0
+            case out of
+                Nothing -> error "Output is not a value."
+                Just x -> print x
         "-biv" -> do
             s0 <- mkState $ compile mod
-            eval_ s0
+            runGCodeVerbose s0
         _ -> error "Unsupported backend."
 
+-- | Parse each line as a global definition.
 genAST :: String -> [(Ident, Expr Ident)]
-genAST file = [unDecl $ parse $ fromString l  | l <- lines file, not (all isSpace l || null l)]
+genAST file = [unDecl $ parse $ fromString l | l <- lines file, not (all isSpace l || null l)]
     where
         parse line = case parseSource line of
             Left e -> error $ printf "Parser error on line: \"%s\"" line
