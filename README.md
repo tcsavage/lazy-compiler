@@ -13,6 +13,18 @@ Backends:
 * *-bpp* - Pretty print core code.
 * *-bppgc* - Generate and pretty print CGode.
 
+Directories
+-----------
+
+* examples
+    * Example programs
+* res
+    * Compiler run-time files
+* rts
+    * Runtime system code (C)
+* src
+    * Compiler and interpreter source code (Haskell)
+
 Modules
 -------
 
