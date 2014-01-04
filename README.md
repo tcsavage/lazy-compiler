@@ -7,6 +7,7 @@ Usage:
 
 Backends:
 
+* *-bi* - Interpreter. Generates and interprets GCode, printing the final value only.
 * *-biv* - Interpreter (verbose). Generates and interprets GCode, printing each state as it goes.
 * *-bviac* - Generate C code (from GCode). Requires `RTS.h` and must be compiled with `RTS.c`.
 * *-bpp* - Pretty print core code.
