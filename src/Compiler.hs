@@ -11,6 +11,7 @@ import AST
 import GMachine
 import PrettyPrinter
 
+-- | Generate GCode from a core module.
 compile :: Module -> [(String, [Instruction String], Int)]
 compile mod = map compileTopLevel (_tlDecls mod) ++ primOps
 

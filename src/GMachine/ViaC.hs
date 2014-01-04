@@ -10,23 +10,26 @@ import Paths_simplelang
 
 import GMachine
 
+-- | Given a list of (name, gcode, arity) triplets, build a C file which will run the code.
 generateC :: [(String, [Instruction String], Int)] -> String
 generateC globals = printf template (length globals) (concatMap translateGlobal $ renameGlobals globals)
 
+-- | The template C file. (res/template.c)
 template :: String
 template = unsafePerformIO $ do
     template <- getDataFileName "template.c"
     readFile template
 
--- | Give each global a numeric offset and replace instances of the number with the offset instead.
+-- | Give each global name a numeric offset and replace instances of the name with the offset instead.
 renameGlobals :: [(String, [Instruction String], Int)] -> [(String, Int, [Instruction Int], Int)]
 renameGlobals globals = map doRename globals
     where
         names = map (\(name, ins, arity) -> name) globals
         mapper name = fromMaybe (error $ printf "Unknown global `%s`\n" name) $ lookup name $ zip names [0..]
-        removeHash = replace "#" "_PRIM_"
+        removeHash = replace "#" "_PRIM_"  -- Hashes are not valid in C identifiers.
         doRename (name, code, arity) = (removeHash name, mapper name, map (fmap mapper) code, arity)
 
+-- | Translate instructions into C values.
 translateIns :: Instruction Int -> String
 translateIns (PushGlobal n) = printf "insPushGlobal(%d)" n
 translateIns (PushInt n) = printf "insPushInt(%d)" n
@@ -41,6 +44,7 @@ translateIns Eval = "insEval()"
 translateIns Add = "insAdd()"
 translateIns Mul = "insMul()"
 
+-- | Translate GCode into a sequence of C values.
 translateCode :: [Instruction Int] -> String
 translateCode ins = (intercalate ", " $ map translateIns ins) ++ ", insEnd()"
 

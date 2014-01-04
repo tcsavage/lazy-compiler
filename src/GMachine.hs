@@ -2,6 +2,7 @@
 
 module GMachine where
 
+-- | The set of G Machine instructions. Parameterised over the global name type.
 data Instruction a = PushGlobal a
                    | PushInt Int
                    | Push Int
@@ -30,5 +31,6 @@ instance Functor Instruction where
     fmap _ Add = Add
     fmap _ Mul = Mul
 
+-- | The first code to be loaded into the automaton.
 initialCode :: [Instruction String]
 initialCode = [PushGlobal "main", Eval]

@@ -9,9 +9,11 @@ import Text.Printf
 
 import AST
 
+-- | Parse a global definition.
 parseSource :: String -> Either ParseError Decl
 parseSource input = parse parseDecl "(unknown)" input
 
+-- | Core language definition.
 lang :: LanguageDef st
 lang = LanguageDef { commentStart = "{-"
                    , commentEnd = "-}"
