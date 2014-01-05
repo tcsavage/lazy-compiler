@@ -29,16 +29,19 @@ Node *mmAlloc() {
 }
 
 void gcMark() {
-    printf("Marking...\n");
     Env *e;
     Stack *s;
-    // Loop over dump.
     int i;
+    // Loop over active stack.
+    for (i = 0; i < activeStack->head; ++i) {
+        gcMarkNode(activeStack->data[i]);
+    }
+    // Loop over dump.
     int j;
     for (i = 0; i < dump->head; ++i) {
         e = dump->data[i];
         s = e->stack;
-        // Loop over stack.
+        // Loop over dumped stack.
         for (j = 0; j < s->head; ++j) {
             gcMarkNode(s->data[j]);
         }
@@ -66,13 +69,12 @@ void gcMarkNode(Node *node) {
 }
 
 void gcSweep() {
-    printf("Sweeping...\n");
     if (allocList != NULL) {
         ListNode *ln = allocList->head;
         ListNode *next;
         while (ln != NULL) {
             next = ln->next;
-            if (ln->data->visited != visitedFlag) {
+            if (ln->data->nodeType != NODE_GLOBAL && ln->data->visited != visitedFlag) {
                 listDelete(ln);
             }
             ln = next;

@@ -36,7 +36,7 @@ void freeList(List *l) {
     if (l->head != NULL) {
         ListNode *ln = l->head;
         ListNode *next;
-        while (ln != l->tail) {
+        while (ln != NULL) {
             next = ln->next;
             freeListNode(ln);
             ln = next;
