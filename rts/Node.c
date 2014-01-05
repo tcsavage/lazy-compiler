@@ -30,9 +30,10 @@ Node *mkNodeInd(Node *ptr) {
 }
 
 Node *mkNodeRef(int type, void *node) {
-    Node *ref = (Node *) malloc(sizeof(Node));
+    Node *ref = mmAlloc();
     ref->nodeType = type;
     ref->addr = node;
+    ref->visited = 1 & (~visitedFlag);  // Set to the oposite of the current GC visited flag.
     return ref;
 }
 

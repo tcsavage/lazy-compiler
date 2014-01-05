@@ -4,6 +4,7 @@
 #include "Dump.h"
 #include "Env.h"
 #include "Instruction.h"
+#include "Memory.h"
 #include "Node.h"
 #include "Stack.h"
 

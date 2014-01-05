@@ -209,13 +209,20 @@ int run(Instruction *insStart, Node *globals[]) {
     globalTable = globals;
 
     while (activeEnv->code[activeEnv->offset].instType != INS_END) {
-        // printf("%d : %d\n", activeEnv->code[activeEnv->offset].instType, activeEnv->code[activeEnv->offset].arg);
+        printf("%d : %d\n", activeEnv->code[activeEnv->offset].instType, activeEnv->code[activeEnv->offset].arg);
         decodeAndRun(&activeEnv->code[activeEnv->offset]);
         activeEnv->offset++;
+        // gcMark();
+        // gcSweep();
     }
 
+    printNode(sPeek());
+    int allocSize = listSize(allocList);
+    printf("Final memory usage: %d nodes (%d bytes)\n", allocSize, allocSize*sizeof(Node));
+
     // Cleanup.
-    pdfStack();
+    // pdfStack();
+    quitMemoryManager();
     freeEnv(activeEnv);
     return 0;
 }

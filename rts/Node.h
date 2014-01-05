@@ -11,6 +11,7 @@
 typedef struct Node {
     int nodeType;
     void *addr;
+    char visited;  // Garbage collection flag.
 } Node;
 
 typedef struct NodeInt {

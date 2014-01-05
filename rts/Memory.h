@@ -7,6 +7,7 @@
 #include "Dump.h"
 #include "Env.h"
 #include "Instruction.h"
+#include "LinkedList.h"
 #include "Node.h"
 #include "Stack.h"
 
@@ -27,5 +28,17 @@ Env *activeEnv;
 
 // Globals.
 Node **globalTable;
+
+// Memory manager.
+List *allocList;
+void initMemoryManager();
+void quitMemorymanager();
+Node *mmAlloc();
+
+// Garbage collection.
+static char visitedFlag = 1;
+void gcMark();
+void gcMarkNode(Node *node);
+void gcSweep();
 
 #endif
