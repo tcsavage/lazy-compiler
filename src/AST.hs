@@ -19,17 +19,22 @@ data Expr a = V a  -- Variable
             | Expr a :@ Expr a  -- Application
             | Lam a (Expr a)  -- Lambda
             | Let Bool [(Ident, Expr a)] (Expr a)  -- Recursive let binding
+            | Constr Int Type  -- Data constructor (tag and type)
             | PrimFun PrimFun  -- Primitive function
             deriving (Eq,Ord,Show,Read)
 
 data Type = TyFun Type Type
           | TyInt
+          | TyVar Ident
+          | TyKindStar
           deriving (Eq,Ord,Show,Read)
 
 (~>) :: Type -> Type -> Type
 (~>) = TyFun
 
-data Decl = Decl { dident :: Ident, dval :: Expr Ident } deriving (Show, Eq)
+data Decl = DTerm { dident :: Ident, dval :: Expr Ident }
+          | DType { dident :: Ident, dconstrs :: [Ident] }
+          deriving (Show, Eq)
 
 unDecl :: Decl -> (Ident, Expr Ident)
 unDecl (Decl i e) = (i, e)
@@ -56,7 +61,7 @@ getArity _ = 0
 
 -- Module type.
 data Module = Module { _modName :: String
-                     , _tlDecls :: [(Ident, Expr Ident)]
+                     , _tlDecls :: [Decl]
                      } deriving (Show)
 
 makeLenses ''Module

@@ -24,6 +24,7 @@ ppExpr (V ident) = ppIdent ident
 ppExpr (Lam b e) = printf "\\%s. %s" (ppIdent b) (ppExpr e)
 ppExpr (l :@ r) = printf "(%s @ %s)" (ppExpr l) (ppExpr r)
 ppExpr (Let rec ds e) = printf "let%s %s in %s" (if rec then "rec" else "") (intercalate ", " $ map ppDecl ds) (ppExpr e)
+ppExpr (Constr tag arity) = printf "Pack{%d, %d}" tag arity
 ppExpr (PrimFun pf) = ppPrimFun pf
 
 ppPrimFun :: PrimFun -> String

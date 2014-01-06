@@ -1,0 +1,15 @@
+module Data where
+
+i : Int -> Int = \x:Int. x:Int
+k : Int -> Int -> Int = \x:Int. \y:Int. x:Int
+
+data List where
+    Null : List  -- Pack{0}:List
+    Cons : Int -> List -> List  -- Pack{1}:Int->List->List @ x:Int @ xs:List
+end
+
+-- DType (Id "List" TyKindStar) [TyVar (Id "List" TyKindStar), TyFun TyInt (TyFun (TyVar (Id "List" TyKindStar)) (TyVar (Id "List" TyKindStar)))]
+
+singleton : Int -> List Int = Pack{2,2} 55 @ Pack{1,0}
+
+main : Int = Mul# @ (Add# @ 10 @ 6) @ 2

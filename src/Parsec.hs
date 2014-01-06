@@ -23,7 +23,7 @@ lang = LanguageDef { commentStart = "{-"
                    , identLetter = alphaNum <|> char '_'
                    , opStart = oneOf ":!#$%&*+./<=>?@\\^|-~"
                    , opLetter = oneOf ":!#$%&*+./<=>?@\\^|-~"
-                   , reservedNames = ["let", "letrec", "in", "module", "interface", "implements", "where", "Add#", "Mul#"]
+                   , reservedNames = ["let", "letrec", "in", "module", "interface", "implements", "data", "where", "end", "Int", "Add#", "Mul#"]
                    , reservedOpNames = ["@", ":", "\\", ".", "->", "="]
                    , caseSensitive = True
                    }
@@ -31,12 +31,32 @@ lang = LanguageDef { commentStart = "{-"
 tokParse :: TokenParser st
 tokParse = makeTokenParser lang
 
+parseModule :: Parsec String st Module
+parseModule = do
+    reserved tokParse "module"
+    modName <- identifier tokParse
+    reserved tokParse "where"
+    char '\n'
+    manyTill parseDecl eof
+
 parseDecl :: Parsec String st Decl
-parseDecl = do
+parseDecl = try parseDecl_Type <|> parseDecl_Term
+
+parseDecl_Type :: Parsec String st Decl
+parseDecl_Type = do
+    reserved tokParse "data"
+    typeName <- identifier tokParse
+    reserved tokParse "where"
+    constrs <- sepBy parseIdent (char '\n' <|> char ';')
+    reserved tokParse "end"
+    pure $ DType (Id typeName TyKindStar) constrs
+
+parseDecl_Term :: Parsec String st Decl
+parseDecl_Term = do
     ident <- parseIdent
     reservedOp tokParse "="
     expr <- parseExpr
-    pure $ Decl ident expr
+    pure $ DTerm ident expr
 
 parseIdent :: Parsec String st Ident
 parseIdent = do
@@ -46,18 +66,23 @@ parseIdent = do
     pure $ Id name ty
 
 parseType :: Parsec String st Type
-parseType = chainr1 (parens tokParse parseType <|> parseType_Int) (reservedOp tokParse "->" >> pure TyFun)
+parseType = chainr1 (parens tokParse parseType <|> parseType_Int <|> parseType_Var) (reservedOp tokParse "->" >> pure TyFun)
 
 parseType_Int :: Parsec String st Type
 parseType_Int = do
-    tyIdent <- identifier tokParse
+    reserved tokParse "Int"
     pure TyInt
+
+parseType_Var :: Parsec String st Type
+parseType_Var = do
+    name <- identifier tokParse
+    pure $ TyVar name TyKindStar
 
 parseExpr :: Parsec String st (Expr Ident)
 parseExpr = parseExpr_Let <|> parseExpr_Aps
 
 parseExpr_Aps :: Parsec String st (Expr Ident)
-parseExpr_Aps = chainl1 (parens tokParse parseExpr <|> parseExpr_Lam <|> parseExpr_PrimOp <|> parseExpr_Var <|> parseExpr_Lit) (reservedOp tokParse "@" >> pure (:@))
+parseExpr_Aps = chainl1 (parens tokParse parseExpr <|> parseExpr_Lam <|> parseExpr_PrimOp <|> parseExpr_Constr <|> parseExpr_Var <|> parseExpr_Lit) (reservedOp tokParse "@" >> pure (:@))
 
 parseExpr_Let :: Parsec String st (Expr Ident)
 parseExpr_Let = do
@@ -66,6 +91,15 @@ parseExpr_Let = do
     reserved tokParse "in"
     expr <- parseExpr_Aps
     pure $ Let rec defs expr
+
+parseExpr_Constr :: Parsec String st (Expr Ident)
+parseExpr_Constr = do
+    symbol tokParse "Pack{"
+    tag <- fromInteger `fmap` natural tokParse
+    symbol tokParse ","
+    arity <- fromInteger `fmap` natural tokParse
+    symbol tokParse "}"
+    pure $ Constr tag arity
 
 parseExpr_PrimOp :: Parsec String st (Expr Ident)
 parseExpr_PrimOp = parseOpName <$> choice primOpNames
