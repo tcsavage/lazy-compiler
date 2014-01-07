@@ -36,8 +36,8 @@ data Decl = DTerm { dident :: Ident, dval :: Expr Ident }
           | DType { dident :: Ident, dconstrs :: [Ident] }
           deriving (Show, Eq)
 
-unDecl :: Decl -> (Ident, Expr Ident)
-unDecl (Decl i e) = (i, e)
+--unDecl :: Decl -> (Ident, Expr Ident)
+--unDecl (Decl i e) = (i, e)
 
 data Ident = Id { name :: String
                 , typeOf :: Type
@@ -66,5 +66,9 @@ data Module = Module { _modName :: String
 
 makeLenses ''Module
 
-getTopLevelNames :: Module -> [String]
-getTopLevelNames = nub . map (name . fst) . _tlDecls
+--getTopLevelNames :: Module -> [String]
+--getTopLevelNames = nub . map (name . dval) . _tlDecls
+
+returnType :: Type -> Type
+returnType (TyFun _ r) = returnType r
+returnType x = x

@@ -10,8 +10,8 @@ import Text.Printf
 import AST
 
 -- | Parse a global definition.
-parseSource :: String -> Either ParseError Decl
-parseSource input = parse parseDecl "(unknown)" input
+parseSource :: String -> Either ParseError Module
+parseSource input = parse parseModule "(unknown)" input
 
 -- | Core language definition.
 lang :: LanguageDef st
@@ -24,7 +24,7 @@ lang = LanguageDef { commentStart = "{-"
                    , opStart = oneOf ":!#$%&*+./<=>?@\\^|-~"
                    , opLetter = oneOf ":!#$%&*+./<=>?@\\^|-~"
                    , reservedNames = ["let", "letrec", "in", "module", "interface", "implements", "data", "where", "end", "Int", "Add#", "Mul#"]
-                   , reservedOpNames = ["@", ":", "\\", ".", "->", "="]
+                   , reservedOpNames = ["@", ":", "\\", ".", "->", "=", ";"]
                    , caseSensitive = True
                    }
 
@@ -36,8 +36,8 @@ parseModule = do
     reserved tokParse "module"
     modName <- identifier tokParse
     reserved tokParse "where"
-    char '\n'
-    manyTill parseDecl eof
+    decls <- manyTill parseDecl eof
+    pure $ Module modName decls
 
 parseDecl :: Parsec String st Decl
 parseDecl = try parseDecl_Type <|> parseDecl_Term
@@ -47,7 +47,7 @@ parseDecl_Type = do
     reserved tokParse "data"
     typeName <- identifier tokParse
     reserved tokParse "where"
-    constrs <- sepBy parseIdent (char '\n' <|> char ';')
+    constrs <- sepBy parseIdent (reservedOp tokParse ";")
     reserved tokParse "end"
     pure $ DType (Id typeName TyKindStar) constrs
 
@@ -76,7 +76,7 @@ parseType_Int = do
 parseType_Var :: Parsec String st Type
 parseType_Var = do
     name <- identifier tokParse
-    pure $ TyVar name TyKindStar
+    pure $ TyVar $ Id name TyKindStar
 
 parseExpr :: Parsec String st (Expr Ident)
 parseExpr = parseExpr_Let <|> parseExpr_Aps
@@ -87,7 +87,7 @@ parseExpr_Aps = chainl1 (parens tokParse parseExpr <|> parseExpr_Lam <|> parseEx
 parseExpr_Let :: Parsec String st (Expr Ident)
 parseExpr_Let = do
     rec <- try (reserved tokParse "letrec" >> pure True) <|> try (reserved tokParse "let" >> pure False)
-    defs <- commaSep tokParse (unDecl <$> parseDecl)
+    defs <- commaSep tokParse ((\(DTerm i e) -> (i, e)) <$> parseDecl_Term)
     reserved tokParse "in"
     expr <- parseExpr_Aps
     pure $ Let rec defs expr
@@ -97,9 +97,9 @@ parseExpr_Constr = do
     symbol tokParse "Pack{"
     tag <- fromInteger `fmap` natural tokParse
     symbol tokParse ","
-    arity <- fromInteger `fmap` natural tokParse
+    ty <- parseType
     symbol tokParse "}"
-    pure $ Constr tag arity
+    pure $ Constr tag ty
 
 parseExpr_PrimOp :: Parsec String st (Expr Ident)
 parseExpr_PrimOp = parseOpName <$> choice primOpNames
