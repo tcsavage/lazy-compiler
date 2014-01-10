@@ -341,6 +341,9 @@ unwind = do
         newState (NNum n) = do
             ds <- dumpSize
             when (ds > 0) dumpRestore
+        newState (NConstr tag addrs) = do
+            ds <- dumpSize
+            when (ds > 0) dumpRestore
         newState (NAp f x) = do
             stackPush f
             setCode [Unwind]
@@ -361,15 +364,15 @@ eval = dumpPush
 
 pack :: Int -> Int -> GM ()
 pack tag arity = do
-    xs <- repliacteM stackPop
+    xs <- replicateM arity stackPop
     addr <- hAlloc $ NConstr tag xs
     stackPush addr
 
-caseJump :: [(Int, [Instruction a])] -> GM ()
+caseJump :: [(Int, [Instruction Name])] -> GM ()
 caseJump xs = do
     addr <- stackPeek
     (NConstr tag dataPtrs) <- hDeref addr
-    let (_, is) = fromMaybe (error "Non-exhaustive patterns in function.") $ lookup tag xs
+    let is = fromMaybe (error "Non-exhaustive patterns in function.") $ lookup tag xs
     prependCode is
 
 split :: Int -> GM ()
