@@ -23,7 +23,7 @@ lang = LanguageDef { commentStart = "{-"
                    , identLetter = alphaNum <|> char '_'
                    , opStart = oneOf ":!#$%&*+./<=>?@\\^|-~"
                    , opLetter = oneOf ":!#$%&*+./<=>?@\\^|-~"
-                   , reservedNames = ["let", "letrec", "in", "module", "interface", "implements", "data", "where", "end", "Int", "Add#", "Mul#"]
+                   , reservedNames = ["let", "letrec", "in", "module", "interface", "implements", "data", "case", "of", "where", "end", "Int", "Add#", "Mul#"]
                    , reservedOpNames = ["@", ":", "\\", ".", "->", "=", ";"]
                    , caseSensitive = True
                    }
@@ -82,7 +82,7 @@ parseExpr :: Parsec String st (Expr Ident)
 parseExpr = parseExpr_Let <|> parseExpr_Aps
 
 parseExpr_Aps :: Parsec String st (Expr Ident)
-parseExpr_Aps = chainl1 (parens tokParse parseExpr <|> parseExpr_Lam <|> parseExpr_PrimOp <|> parseExpr_Constr <|> parseExpr_Var <|> parseExpr_Lit) (reservedOp tokParse "@" >> pure (:@))
+parseExpr_Aps = chainl1 (parens tokParse parseExpr <|> parseExpr_Lam <|> parseExpr_Case <|> parseExpr_PrimOp <|> parseExpr_Constr <|> parseExpr_Var <|> parseExpr_Lit) (reservedOp tokParse "@" >> pure (:@))
 
 parseExpr_Let :: Parsec String st (Expr Ident)
 parseExpr_Let = do
@@ -99,7 +99,21 @@ parseExpr_Constr = do
     symbol tokParse ","
     ty <- parseType
     symbol tokParse "}"
-    pure $ Constr tag ty
+    symbol tokParse "{"
+    values <- sepBy parseExpr (symbol tokParse ",")
+    symbol tokParse "}"
+    pure $ Constr tag ty values
+
+parseExpr_Case :: Parsec String st (Expr Ident)
+parseExpr_Case = do
+    reserved tokParse "case"
+    expr <- parseExpr
+    reserved tokParse "of"
+    ty <- parseType
+    reserved tokParse "where"
+    alts <- sepEndBy parseCaseAlt (symbol tokParse ";")
+    reserved tokParse "end"
+    pure $ Case expr ty alts
 
 parseExpr_PrimOp :: Parsec String st (Expr Ident)
 parseExpr_PrimOp = parseOpName <$> choice primOpNames
@@ -122,3 +136,10 @@ parseExpr_Var = V <$> parseIdent
 
 parseExpr_Lit :: Parsec String st (Expr Ident)
 parseExpr_Lit = (L . fromInteger) <$> integer tokParse
+
+parseCaseAlt :: Parsec String st (Alt Ident)
+parseCaseAlt = do
+    tag <- fromInteger <$> (angles tokParse $ natural tokParse)
+    binders <- manyTill (angles tokParse parseIdent) (symbol tokParse "->")
+    expr <- parseExpr
+    pure (tag, binders, expr)

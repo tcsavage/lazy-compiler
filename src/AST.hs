@@ -19,7 +19,8 @@ data Expr a = V a  -- Variable
             | Expr a :@ Expr a  -- Application
             | Lam a (Expr a)  -- Lambda
             | Let Bool [(Ident, Expr a)] (Expr a)  -- Recursive let binding
-            | Constr Int Type  -- Data constructor (tag and type)
+            | Case (Expr a) Type [Alt a]
+            | Constr Int Type [Expr a]  -- Data constructor (tag and type)
             | PrimFun PrimFun  -- Primitive function
             deriving (Eq,Ord,Show,Read)
 
@@ -31,6 +32,8 @@ data Type = TyFun Type Type
 
 (~>) :: Type -> Type -> Type
 (~>) = TyFun
+
+type Alt a = (Int, [a], Expr a)
 
 data Decl = DTerm { dident :: Ident, dval :: Expr Ident }
           | DType { dident :: Ident, dconstrs :: [Ident] }
@@ -58,6 +61,10 @@ getArity (Lam b expr) = 1 + (getArity expr)
 getArity (PrimFun op) = case op of
     PrimBinOp _ -> 2
 getArity _ = 0
+
+getTypeArity :: Type -> Int
+getTypeArity (TyFun _ r) = 1 + getTypeArity r
+getTypeArity _ = 0
 
 -- Module type.
 data Module = Module { _modName :: String

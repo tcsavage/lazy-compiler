@@ -6,6 +6,7 @@ import Control.Applicative
 import Control.Monad
 import "mtl" Control.Monad.Reader
 import "mtl" Control.Monad.State
+import Data.Maybe
 
 import AST
 import GMachine
@@ -13,10 +14,11 @@ import PrettyPrinter
 
 -- | Generate GCode from a core module.
 compile :: Module -> [(String, [Instruction String], Int)]
-compile mod = map compileTopLevel (_tlDecls mod) ++ primOps
+compile mod = (catMaybes $ map compileTopLevel (_tlDecls mod)) ++ primOps
 
-compileTopLevel :: (Ident, Expr Ident) -> (String, [Instruction String], Int)
-compileTopLevel (ident, expr) = (name ident, sc expr, getArity expr)
+compileTopLevel :: Decl -> Maybe (String, [Instruction String], Int)
+compileTopLevel (DTerm ident expr) = Just (name ident, sc expr, getArity expr)
+compileTopLevel (DType _ _) = Nothing  -- Types are not compiled.
 
 primOps :: [(String, [Instruction String], Int)]
 primOps = map build [PrimBinOp PrimAdd, PrimBinOp PrimMul]
@@ -50,9 +52,25 @@ sc expr = r body env
         body = getBody expr
 
 r :: Expr Ident -> VarMap -> [Instruction String]
-r body env = c body env ++ [Update d, Pop d, Unwind]
+r body env = e body env ++ [Update d, Pop d, Unwind]
     where
         d = length env
+
+e :: Expr Ident -> VarMap -> [Instruction String]
+e (L n) env = [PushInt n]
+e (Let False decls expr) env = compileLet decls env ++ e expr env' ++ [Slide n]  -- Non-rec.
+    where
+        n = length decls
+        env' = compileArgs decls env
+e (Let True decls expr) env = [Alloc n] ++ compileLetrec decls env' ++ e expr env' ++ [Slide n]  -- Rec.
+    where
+        n = length decls
+        env' = compileArgs decls env
+e (Case expr  _ alts) env = e expr env ++ [CaseJump (d alts env)]
+e ((Constr tag ty values) :@ expr) env = concat (zipWith (\e n -> c e (argOffset n env)) (reverse values) [0..]) ++ [Pack tag arity]
+    where
+        arity = getTypeArity ty
+e x env = c x env ++ [Eval]
 
 c :: Expr Ident -> VarMap -> [Instruction String]
 c (V ident) env = case lookup (name ident) env of
@@ -68,7 +86,19 @@ c (Let True decls expr) env = [Alloc n] ++ compileLetrec decls env' ++ c expr en
     where
         n = length decls
         env' = compileArgs decls env
+c (Constr tag ty values) env = concat (zipWith (\e n -> c e (argOffset n env)) values [0..]) ++ [Pack tag arity]
+    where
+        arity = getTypeArity ty
 c (PrimFun pf) env = [PushGlobal (ppPrimFun pf)]
+
+d :: [Alt Ident] -> VarMap -> [(Int, [Instruction String])]
+d alts env = map (flip a env) alts
+
+a :: Alt Ident -> VarMap -> (Int, [Instruction String])
+a (tag, binders, expr) env = (tag, Split n : e expr bindersEnv ++ [Slide n])
+    where
+        n = length binders
+        bindersEnv = zipWith (\b n -> (name b, n)) binders [0..] ++ argOffset n env
 
 compileLet :: [(Ident, Expr Ident)] -> VarMap -> [Instruction String]
 compileLet [] _ = []

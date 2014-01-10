@@ -35,6 +35,7 @@ data Node = NNum Int  -- Value
           | NAp Addr Addr  -- Addr0 must be a function
           | NGlobal Int GMCode  -- Arity and instructions
           | NInd Addr  -- Indirection node
+          | NConstr Int [Addr]  -- Data constructor node
           deriving (Show, Eq)
 
 -- | Lets us pretty print `Addr` values when inspecting state.
@@ -87,12 +88,24 @@ setCode code = do
     s0 <- get
     put $ s0 { gmInst = code }
 
+prependCode :: [Instruction Name] -> GM ()
+prependCode code = do
+    s0 <- get
+    let exCode = gmInst s0
+    put $ s0 { gmInst = code ++ exCode }
+
 -- | Push an address onto the stack.
 stackPush :: Addr -> GM ()
 stackPush addr = do
     s0 <- get
     let stack0 = gmStack s0
     put $ s0 { gmStack = addr:stack0 }
+
+stackAppend :: [Addr] -> GM ()
+stackAppend addrs = do
+    s0 <- get
+    let stack0 = gmStack s0
+    put $ s0 { gmStack = addrs ++ stack0 }
 
 -- | Pop.
 stackPop :: GM Addr
@@ -263,6 +276,9 @@ dispatch Unwind = unwind
 dispatch Eval = eval
 dispatch Add = primArith2 (+)
 dispatch Mul = primArith2 (*)
+dispatch (Pack t a) = pack t a
+dispatch (CaseJump xs) = caseJump xs
+dispatch (Split n) = split n
 
 -- | Lookup the address of the given global and push it onto the stack.
 pushGlobal :: Name -> GM ()
@@ -342,3 +358,22 @@ unwind = do
 
 eval :: GM ()
 eval = dumpPush
+
+pack :: Int -> Int -> GM ()
+pack tag arity = do
+    xs <- repliacteM stackPop
+    addr <- hAlloc $ NConstr tag xs
+    stackPush addr
+
+caseJump :: [(Int, [Instruction a])] -> GM ()
+caseJump xs = do
+    addr <- stackPeek
+    (NConstr tag dataPtrs) <- hDeref addr
+    let (_, is) = fromMaybe (error "Non-exhaustive patterns in function.") $ lookup tag xs
+    prependCode is
+
+split :: Int -> GM ()
+split n = do
+    addr <- stackPop
+    (NConstr tag dataPtrs) <- hDeref addr
+    stackAppend dataPtrs

@@ -46,7 +46,32 @@ getType (l :@ r) = do
             True -> pure rTy2
             False -> error $ printf "Type mismatch. Function expects %s but got %s." (ppType lTy2) (ppType rTy)
         _ -> error "Can't apply non-functions."
-getType (Constr tag ty) = pure ty
+getType (Case expr ty alts) = do
+    res <- mapM checkAlt alts
+    case and res of
+        True -> pure ty
+        False -> error "Type mismatch in case expression."
+    where
+        checkAlt (tag, binders, body) = do
+            bty <- local (insertIdents binders) $ getType body
+            pure $ bty == ty
+getType (Constr tag ty values)
+    | length values == getTypeArity ty = do
+        passed <- and <$> checkTypes ty values
+        if passed then pure $ returnType ty else error "Type mismatch in data constructor."
+    | length values > getTypeArity ty = error "Data constructor over-saturated."
+    | length values < getTypeArity ty = error "Unsaturated data constructor."
+    where
+        checkTypes :: Type -> [Expr Ident] -> Reader (M.Map String Type) [Bool]
+        checkTypes (TyFun l r) (v:vs) = do
+            ety <- getType v
+            rest <- checkTypes r vs
+            pure $ (l == ety) : rest
+        checkTypes ty' (v:[]) = do
+            ety <- getType v
+            pure $ (ty' == ety) : []
+        checkTypes ty' [] = pure []  -- Nullary constructors.
+        checkTypes ty' vs = error $ printf "Foo: %s -- %s" (show ty') (show vs)
 getType (PrimFun pf) = pure $ getTypePF pf
 
 getTypePF :: PrimFun -> Type
@@ -54,6 +79,10 @@ getTypePF (PrimBinOp op) = TyInt ~> TyInt ~> TyInt
 
 insertIdent :: Ident -> M.Map String Type -> M.Map String Type
 insertIdent (Id name ty) map = M.insert name ty map
+
+insertIdents :: [Ident] -> M.Map String Type -> M.Map String Type
+insertIdents ((Id name ty):xs) map = insertIdents xs $ M.insert name ty map
+insertIdents [] map = map
 
 buildTypeMap :: [Decl] -> M.Map String Type
 buildTypeMap decls = M.fromList $ catMaybes $ map getType decls

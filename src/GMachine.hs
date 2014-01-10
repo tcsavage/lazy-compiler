@@ -15,6 +15,9 @@ data Instruction a = PushGlobal a
                    | Eval
                    | Add
                    | Mul
+                   | Pack Int Int
+                   | CaseJump [(Int, [Instruction a])]
+                   | Split Int
                    deriving (Show, Eq)
 
 instance Functor Instruction where
@@ -30,6 +33,9 @@ instance Functor Instruction where
     fmap _ Eval = Eval
     fmap _ Add = Add
     fmap _ Mul = Mul
+    fmap _ (Pack t a) = Pack t a
+    fmap f (CaseJump x) = CaseJump $ map (\(t, code) -> (t, map (fmap f) code)) x
+    fmap _ (Split n) = Split n
 
 -- | The first code to be loaded into the automaton.
 initialCode :: [Instruction String]
