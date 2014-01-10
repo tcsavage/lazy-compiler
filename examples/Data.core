@@ -16,4 +16,6 @@ singleton : Int -> List = \x:Int. Pack{1, Int->List->List}{x:Int, Pack{0, List}{
 
 head : List -> Int = \lst:List. case lst:List of Int where <0> -> 0 ; <1> <x:Int> <xs:List> -> x:Int end
 
-main : Int = Mul# @ (Add# @ 10 @ 6) @ 2
+testList : List = singleton : Int -> List @ 26
+
+main : Int = head : List -> Int @ testList : List
