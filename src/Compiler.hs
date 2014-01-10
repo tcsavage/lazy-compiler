@@ -67,7 +67,7 @@ e (Let True decls expr) env = [Alloc n] ++ compileLetrec decls env' ++ e expr en
         n = length decls
         env' = compileArgs decls env
 e (Case expr  _ alts) env = e expr env ++ [CaseJump (d alts env)]
-e ((Constr tag ty values) :@ expr) env = concat (zipWith (\e n -> c e (argOffset n env)) (reverse values) [0..]) ++ [Pack tag arity]
+e (Constr tag ty values) env = concat (zipWith (\e n -> c e (argOffset n env)) (reverse values) [0..]) ++ [Pack tag arity]
     where
         arity = getTypeArity ty
 e x env = c x env ++ [Eval]
@@ -86,7 +86,7 @@ c (Let True decls expr) env = [Alloc n] ++ compileLetrec decls env' ++ c expr en
     where
         n = length decls
         env' = compileArgs decls env
-c (Constr tag ty values) env = concat (zipWith (\e n -> c e (argOffset n env)) values [0..]) ++ [Pack tag arity]
+c (Constr tag ty values) env = concat (zipWith (\e n -> c e (argOffset n env)) (reverse values) [0..]) ++ [Pack tag arity]
     where
         arity = getTypeArity ty
 c (PrimFun pf) env = [PushGlobal (ppPrimFun pf)]
