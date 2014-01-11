@@ -20,7 +20,7 @@ import TypeCheck
 main :: IO ()
 main = do
     [backend, srcFile] <- getArgs
-    mod <- (checkModule . Module srcFile . genAST) <$> readFile srcFile
+    mod <- (checkModule . genAST) <$> readFile srcFile
     case backend of
         "-bviac" -> writeFile (srcFile++".c") $ generateC $ compile mod
         "-bpp" -> putStrLn $ pp mod
@@ -37,9 +37,7 @@ main = do
         _ -> error "Unsupported backend."
 
 -- | Parse each line as a global definition.
-genAST :: String -> [(Ident, Expr Ident)]
-genAST file = [unDecl $ parse $ fromString l | l <- lines file, not (all isSpace l || null l)]
-    where
-        parse line = case parseSource line of
-            Left e -> error $ printf "Parser error on line: \"%s\"" line
-            Right d -> d
+genAST :: String -> Module
+genAST file = case parseSource file of
+    Left e -> error $ printf "Parser error: %s" (show e)
+    Right m -> m
