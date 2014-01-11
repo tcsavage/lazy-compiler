@@ -1,0 +1,36 @@
+module STG where
+
+-- The following is the definition of the STG language.
+
+data Program = Program [Binding]
+
+data Binding = Binding Var Lambda
+
+data Lambda = [Var] UpdateFlag [Var] Expr
+
+data UpdateFlag = Updatable | NonUpdatable
+
+data Expr = Let [Binding] Expr
+          | LetRec [Binding] Expr
+          | Case Expr Alts
+          | Ap Var [Atom]
+          | Constr Constr [Atom]
+          | Prim Prim [Atom]
+          | Literal Literal
+
+data Alts = Algebraic [AAlt] DefAlt
+          | Primitive [PAlt] DefAlt
+
+data AAlt = AAlt Constr [Var] Expr
+
+data PAlt = PAlt Literal Expr
+
+data DefAlt = Binding Var Expr
+            | Default Expr
+
+type Literal = Int
+
+data Prim = PrimAdd | PrimMul
+
+data Atom = AtomVar Var
+          | AtomLit Literal
