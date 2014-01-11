@@ -24,8 +24,8 @@ void dumpPush() {
     Env *e = mkEnv();
     e->stack = mkStack(activeStack->size);
     e->code = (Instruction *) malloc(2*sizeof(Instruction));
-    e->code[0] = insUnwind();
-    e->code[1] = insEnd();
+    e->code[0] = (Instruction) { .instType = INS_UNWIND, .arg = 0 };
+    e->code[1] = (Instruction) { .instType = INS_END, .arg = 0 };
     e->offset = -1;
 
     // Bind new environment and push old head onto stack.

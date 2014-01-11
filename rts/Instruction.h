@@ -20,18 +20,4 @@ typedef struct Instruction {
     int arg;
 } Instruction;
 
-Instruction insEnd();
-Instruction insPushGlobal(int n);
-Instruction insPushInt(int n);
-Instruction insPush(int n);
-Instruction insMkAp();
-Instruction insSlide(int n);
-Instruction insAlloc(int n);
-Instruction insUpdate(int n);
-Instruction insPop(int n);
-Instruction insUnwind();
-Instruction insEval();
-Instruction insAdd();
-Instruction insMul();
-
 #endif

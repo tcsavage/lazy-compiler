@@ -29,24 +29,27 @@ renameGlobals globals = map doRename globals
         removeHash = replace "#" "_PRIM_"  -- Hashes are not valid in C identifiers.
         doRename (name, code, arity) = (removeHash name, mapper name, map (fmap mapper) code, arity)
 
+endIns :: String
+endIns = "{ .instType = INS_END, .arg = 0 }"
+
 -- | Translate instructions into C values.
 translateIns :: Instruction Int -> String
-translateIns (PushGlobal n) = printf "insPushGlobal(%d)" n
-translateIns (PushInt n) = printf "insPushInt(%d)" n
-translateIns (Push n) = printf "insPush(%d)" n
-translateIns MkAp = "insMkAp()"
-translateIns (Update n) = printf "insUpdate(%d)" n
-translateIns (Slide n) = printf "insSlide(%d)" n
-translateIns (Alloc n) = printf "insAlloc(%d)" n
-translateIns (Pop n) = printf "insPop(%d)" n
-translateIns Unwind = "insUnwind()"
-translateIns Eval = "insEval()"
-translateIns Add = "insAdd()"
-translateIns Mul = "insMul()"
+translateIns (PushGlobal n) = printf "{ .instType = INS_PUSHGLOBAL, .arg = %d }" n
+translateIns (PushInt n) = printf "{ .instType = INS_PUSHINT, .arg = %d }" n
+translateIns (Push n) = printf "{ .instType = INS_PUSH, .arg = %d }" n
+translateIns MkAp = "{ .instType = INS_MKAP, .arg = 0 }"
+translateIns (Update n) = printf "{ .instType = INS_UPDATE, .arg = %d }" n
+translateIns (Slide n) = printf "{ .instType = INS_SLIDE, .arg = %d }" n
+translateIns (Alloc n) = printf "{ .instType = INS_ALLOC, .arg = %d }" n
+translateIns (Pop n) = printf "{ .instType = INS_POP, .arg = %d }" n
+translateIns Unwind = "{ .instType = INS_UNWIND, .arg = 0 }"
+translateIns Eval = "{ .instType = INS_EVAL, .arg = 0 }"
+translateIns Add = "{ .instType = INS_ADD, .arg = 0 }"
+translateIns Mul = "{ .instType = INS_MUL, .arg = 0 }"
 
 -- | Translate GCode into a sequence of C values.
 translateCode :: [Instruction Int] -> String
-translateCode ins = (intercalate ", " $ map translateIns ins) ++ ", insEnd()"
+translateCode ins = (intercalate ", " $ map translateIns ins) ++ ", " ++ endIns
 
 translateGlobal :: (String, Int, [Instruction Int], Int) -> String
 translateGlobal (name, offset, code, arity) = unlines [commentLine, insDefLine, nodeAllocLine, tableInsLine]
