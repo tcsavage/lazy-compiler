@@ -1,7 +1,20 @@
 simplelang
 ==========
 
-Usage:
+A simple lazy language running on the "G-Machine" abstract machine [Augustsson 1987, Johnsson 1987] implemented in Haskell and C. The goal is to build a simple, easy-to-understand compiler for a small, lazy core language (similar to GHC core) to use as a platform for experimentation with larger source languages.
+
+Todo
+----
+
+* ~~Core => GCode compiler~~
+* ~~GCode interpreter~~
+* ~~GCode compiler (to C)~~
+* Replace G-Machine with STG [Peyton Jones & Salkild 1989]
+* LLVM backend
+* Extend core language to System-F [Reynolds 1974]
+
+Usage
+-----
 
     simplelang BACKEND SOURCEFILE
 
