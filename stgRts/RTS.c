@@ -91,10 +91,20 @@ void printValue(Value *val) {
     }
 }
 
-StgFunPtr black_hole_entry() {
+// Black hole entry code.
+StgFunPtr _black_hole_entry() {
     printf("Black hole error.\n");
     exit(1);
 }
+
+static StgWord _blackHole_info[] = {(StgWord)_black_hole_entry};
+
+// An indirection closure stores a value pointer after the info table.
+StgFunPtr _indirection_entry() {
+    JUMP(node[1]);
+}
+
+static StgWord _indirection_info[] = {(StgWord)_indirection_entry};
 
 //////
 // Test code

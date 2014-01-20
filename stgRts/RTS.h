@@ -99,8 +99,12 @@ void initHeap(int);
 void freeHeap();
 
 // Back hole.
-StgFunPtr black_hole_entry();
-static StgWord blackHole_info[] = {(StgWord)black_hole_entry};
+StgFunPtr _black_hole_entry();
+static StgWord _blackHole_info[];
+
+// Indirection.
+StgFunPtr _indirection_entry();
+static StgWord _indirection_info[];
 
 // Globals.
 static StgWord *node;  // Current closure. `node[0]` is the info table (StgWord *).
