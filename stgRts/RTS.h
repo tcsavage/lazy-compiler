@@ -118,6 +118,7 @@ static StgAddr *hp;  // Heap pointer. Stores closures. Points to the next value 
 static StgAddr *hpLim;  // Marks bottom of heap.
 static StgAddr *hpBack;  // Second heap pointer (for semi-space GC).
 static StgAddr *hpBackLim;  // Bottom of second heap (for semi-space GC).
+static StgInt rTag;  // Constructor tag register.
 static StgInt retInt;  // Primitive integer return register.
 
 #endif
