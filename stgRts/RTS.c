@@ -1,13 +1,16 @@
 #include "RTS.h"
 #include "stdlib.h"
 #include "stdio.h"
+#include "setjmp.h"
 
 StgFunPtr cont;
+jmp_buf jmpEnv;
 
 void run() {
-    while (1) {
+    while (1) {  // Can be replaced with infinite loop (main_cont will need to longjmp to cleanup code).
         cont = (StgFunPtr)(cont)();
     }
+    UNREACHABLE("after `run` loop");
 }
 
 void initStacks(int size) {
@@ -97,54 +100,47 @@ StgFunPtr black_hole_entry() {
 // Test code
 //////
 
-void dumpInt(StgAddr x) {
-    printf("dumpInt: %d\n", (StgInt)x);
-    exit(0);
+void dumpInt(StgInt x) {
+    printf("dumpInt: %d\n", x);
 }
 
-StgFunPtr h() {
-    printf("In h\n");
-    exit(0);
+StgFunPtr dumpInt_cont() {
+    dumpInt(retInt);  // Get the value from the integer return register and dump it.
+    JUMP(popB());  // Jump to the continuation atop the stack.
 }
-
-StgFunPtr g() {
-    printf("In g\n");
-    JUMP(h);
-}
-
-StgFunPtr f() {
-    printf("In f\n");
-    JUMP(g);
-}
-
-StgFunPtr test_entry() {
-    printf("Test entry code. Closure value 1: %d\n", (StgInt)node[1]);
-    JUMP(f);
-}
-
-StgWord test_info[] = {(StgWord)test_entry};
-
-StgWord test_closure[] = {(StgWord)test_info, 12};
 
 StgFunPtr dumpInt_entry() {
-    dumpInt(popA());
+    node = popA();  // Pop arg.
+    pushB((StgAddr)dumpInt_cont);  // Push continuation.
+    ENTER(node);  // Eval the arg.
 }
 
 StgWord dumpInt_info[] = {(StgWord)dumpInt_entry};
 
 StgWord dumpInt_closure[] = {(StgWord)dumpInt_info};
 
-StgFunPtr double_entry() {
-    // (U) Argument satisfaction check.
-    // Stack overflow check.
-    // Heap overflow check.
-    // (U) Info pointer update.
-    // (U) Update frame construction.
+//////////
 
-    // Actual code:
-    StgInt x = (StgInt)popA();
-    pushA((StgAddr)(x*2));
-    ENTER(dumpInt_closure);
+StgFunPtr apply3_entry() {
+    node = popA();  // Pop f and set node.
+    pushA(peekA());  // Duplicate top of the stack.
+    pushA(peekA());  // And again.
+    ENTER(node);
+}
+
+StgWord apply3_info[] = {(StgWord)apply3_entry};
+
+// apply3 f x = f x x x
+// apply3 = {} \n {f,x} -> f {x,x,x}
+StgWord apply3_closure[] = {(StgWord)apply3_info};
+
+//////////
+
+StgFunPtr double_entry() {
+    // Expects a primitive integer argument on the stack. Puts result into primitive integer return register.
+    StgInt x = (StgInt)popA();  // Pop argument from stack.
+    retInt = x*2;  // Set integer return register.
+    JUMP(popB());  // Pop return code and jump to it.
 }
 
 StgWord double_info[] = {(StgWord)double_entry};
@@ -152,20 +148,66 @@ StgWord double_info[] = {(StgWord)double_entry};
 // double x = x*2
 StgWord double_closure[] = {(StgWord)double_info};
 
+//////////
+
+StgFunPtr main_x_entry() {
+    pushA((StgAddr)5);  // Push primitive integer into stack.
+    ENTER(double_closure);
+}
+
+StgWord main_x_info[] = {(StgWord)main_x_entry};
+
+//////////
+
+StgFunPtr main_cont() {
+    // Execution is finished. Escape the `run` function.
+    longjmp(jmpEnv, 1);
+}
+
+StgFunPtr main_entry() {
+    // Create main_x_info closure on the heap.
+    hp[0] = &main_x_info;
+
+    // Increment hp by size of closure.
+    ++hp;
+
+    // Call dumpInt.
+    node = dumpInt_closure;
+    pushA(&hp[-1]); // Push x. 1 is the size of the closure.
+    pushB((StgAddr)main_cont);  // Push main continuation.
+    ENTER(node);
+}
+
+StgWord main_info[] = {(StgWord)main_entry};
+
+// main = dumpInt (double 5)
+// main = let x = {} \u {} -> double {5}
+//        in dumpInt {x}
+StgWord main_closure[] = {(StgWord)main_info};
+
+//////////
+
 StgFunPtr start() {
-    pushA((StgAddr)678);
-    node = double_closure;
+    // Enter main closure.
+    node = main_closure;
     ENTER(node);
 }
 
 int main(int argc, char const *argv[])
 {
+    // Set-up the environment.
     initStacks(256);
     initHeap(256);
-    Value *val = mkValueInt(54);
-    printValue(val);
-    cont = (StgFunPtr)start;
-    run();
+    cont = (StgFunPtr)start;  // Set initial code label to `start`.
+
+    int exiting;  // Variable for tracking longjmp.
+    exiting = setjmp(jmpEnv);  // longjmp re-entry point.
+    if (!exiting) {
+        run();  // Run the mini-interpreter.
+        UNREACHABLE("after `run`");
+    }
+
+    // Tidy-up and exit.
     freeHeap();
     freeStacks();
     return 0;
