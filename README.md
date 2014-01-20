@@ -24,7 +24,7 @@ Backends:
 * *-biv* - Interpreter (verbose). Generates and interprets GCode, printing each state as it goes.
 * *-bviac* - Generate C code (from GCode). Requires `RTS.h` and must be compiled with `RTS.c`.
 * *-bpp* - Pretty print core code.
-* *-bppgc* - Generate and pretty print CGode.
+* *-bppgc* - Generate and pretty print GCode.
 
 Directories
 -----------
