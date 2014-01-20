@@ -116,12 +116,14 @@ void dumpInt(StgInt x) {
 
 StgFunPtr dumpInt_cont() {
     dumpInt(retInt);  // Get the value from the integer return register and dump it.
-    JUMP(popB());  // Jump to the continuation atop the stack.
+    JUMP(((StgAddr *)popB())[0]);  // Jump to the continuation in the return vector atop the stack.
 }
+
+StgWord dumpInt_retvec[] = {(StgWord)dumpInt_cont};
 
 StgFunPtr dumpInt_entry() {
     node = popA();  // Pop arg.
-    pushB((StgAddr)dumpInt_cont);  // Push continuation.
+    pushB((StgAddr)dumpInt_retvec);  // Push return vector.
     ENTER(node);  // Eval the arg.
 }
 
@@ -150,7 +152,7 @@ StgFunPtr double_entry() {
     // Expects a primitive integer argument on the stack. Puts result into primitive integer return register.
     StgInt x = (StgInt)popA();  // Pop argument from stack.
     retInt = x*2;  // Set integer return register.
-    JUMP(popB());  // Pop return code and jump to it.
+    JUMP(((StgAddr *)popB())[0]);  // Pop return vector and jump to the continuation.
 }
 
 StgWord double_info[] = {(StgWord)double_entry};
@@ -174,6 +176,8 @@ StgFunPtr main_cont() {
     longjmp(jmpEnv, 1);
 }
 
+StgWord main_retvec[] = {(StgWord)main_cont};
+
 StgFunPtr main_entry() {
     // Create main_x_info closure on the heap.
     hp[0] = &main_x_info;
@@ -184,7 +188,7 @@ StgFunPtr main_entry() {
     // Call dumpInt.
     node = dumpInt_closure;
     pushA(&hp[-1]); // Push x. 1 is the size of the closure.
-    pushB((StgAddr)main_cont);  // Push main continuation.
+    pushB((StgAddr)main_retvec);  // Push return vector.
     ENTER(node);
 }
 
