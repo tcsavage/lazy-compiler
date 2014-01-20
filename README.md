@@ -26,16 +26,6 @@ Backends:
 * *-bpp* - Pretty print core code.
 * *-bppgc* - Generate and pretty print CGode.
 
-Todo
-----
-
-* Replace G-Machine implementation with STG
-* Finish LLVM backend
-* More RTS options (control over stack+heap size, garbage collection)
-* Implement full System-F
-* Higher-level source language
-* IO system
-
 Directories
 -----------
 
