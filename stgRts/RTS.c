@@ -1,10 +1,8 @@
 #include "RTS.h"
 #include "stdlib.h"
 #include "stdio.h"
-#include "setjmp.h"
 
 StgFunPtr cont;
-jmp_buf jmpEnv;
 
 void run() {
     while (1) {  // Can be replaced with infinite loop (main_cont will need to longjmp to cleanup code).
@@ -97,18 +95,42 @@ StgFunPtr _black_hole_entry() {
     exit(1);
 }
 
-static StgWord _blackHole_info[] = {(StgWord)_black_hole_entry};
+StgWord _blackHole_info[] = {(StgWord)_black_hole_entry};
 
 // An indirection closure stores a value pointer after the info table.
 StgFunPtr _indirection_entry() {
     JUMP(node[1]);
 }
 
-static StgWord _indirection_info[] = {(StgWord)_indirection_entry};
+StgWord _indirection_info[] = {(StgWord)_indirection_entry};
 
-//////
-// Test code
-//////
+// Primitive addition.
+StgFunPtr _primIntAdd_entry() {
+    // Expects a primitive integer argument on the stack. Puts result into primitive integer return register.
+    StgInt x = (StgInt)popA();  // Pop argument from stack.
+    StgInt y = (StgInt)popA();  // Pop argument from stack.
+    retInt = x+y;  // Set integer return register.
+    JUMP(((StgAddr *)popB())[0]);  // Pop return vector and jump to the continuation.
+}
+
+// Primitive multiplication.
+StgFunPtr _primIntMul_entry() {
+    // Expects a primitive integer argument on the stack. Puts result into primitive integer return register.
+    StgInt x = (StgInt)popA();  // Pop argument from stack.
+    StgInt y = (StgInt)popA();  // Pop argument from stack.
+    retInt = x*y;  // Set integer return register.
+    JUMP(((StgAddr *)popB())[0]);  // Pop return vector and jump to the continuation.
+}
+
+// Wrapped integer entry.
+StgFunPtr _wrappedInt_entry() {
+    // Put enclosed integer into return register.
+    retInt = node[1];
+    // Jump to continuation.
+    JUMP(((StgAddr *)popB())[0]);
+}
+
+StgWord _wrappedInt_info[] = {(StgWord)_wrappedInt_entry};
 
 void dumpInt(StgInt x) {
     printf("dumpInt: %d\n", x);
@@ -131,87 +153,17 @@ StgWord dumpInt_info[] = {(StgWord)dumpInt_entry};
 
 StgWord dumpInt_closure[] = {(StgWord)dumpInt_info};
 
-//////////
-
-StgFunPtr apply3_entry() {
-    node = popA();  // Pop f and set node.
-    pushA(peekA());  // Duplicate top of the stack.
-    pushA(peekA());  // And again.
-    ENTER(node);
-}
-
-StgWord apply3_info[] = {(StgWord)apply3_entry};
-
-// apply3 f x = f x x x
-// apply3 = {} \n {f,x} -> f {x,x,x}
-StgWord apply3_closure[] = {(StgWord)apply3_info};
-
-//////////
-
-StgFunPtr double_entry() {
-    // Expects a primitive integer argument on the stack. Puts result into primitive integer return register.
-    StgInt x = (StgInt)popA();  // Pop argument from stack.
-    retInt = x*2;  // Set integer return register.
-    JUMP(((StgAddr *)popB())[0]);  // Pop return vector and jump to the continuation.
-}
-
-StgWord double_info[] = {(StgWord)double_entry};
-
-// double x = x*2
-StgWord double_closure[] = {(StgWord)double_info};
-
-//////////
-
-StgFunPtr main_x_entry() {
-    pushA((StgAddr)5);  // Push primitive integer into stack.
-    ENTER(double_closure);
-}
-
-StgWord main_x_info[] = {(StgWord)main_x_entry};
-
-//////////
-
-StgFunPtr main_cont() {
-    // Execution is finished. Escape the `run` function.
-    longjmp(jmpEnv, 1);
-}
-
-StgWord main_retvec[] = {(StgWord)main_cont};
-
-StgFunPtr main_entry() {
-    // Create main_x_info closure on the heap.
-    hp[0] = &main_x_info;
-
-    // Increment hp by size of closure.
-    ++hp;
-
-    // Call dumpInt.
-    node = dumpInt_closure;
-    pushA(&hp[-1]); // Push x. 1 is the size of the closure.
-    pushB((StgAddr)main_retvec);  // Push return vector.
-    ENTER(node);
-}
-
-StgWord main_info[] = {(StgWord)main_entry};
-
-// main = dumpInt (double 5)
-// main = let x = {} \u {} -> double {5}
-//        in dumpInt {x}
-StgWord main_closure[] = {(StgWord)main_info};
-
-//////////
-
 StgFunPtr start() {
     // Enter main closure.
-    node = main_closure;
     ENTER(node);
 }
 
-int main(int argc, char const *argv[])
+int runRTS(StgWord *main_closure, int argc, char const *argv[])
 {
     // Set-up the environment.
     initStacks(256);
     initHeap(256);
+    node = main_closure;
     cont = (StgFunPtr)start;  // Set initial code label to `start`.
 
     int exiting;  // Variable for tracking longjmp.

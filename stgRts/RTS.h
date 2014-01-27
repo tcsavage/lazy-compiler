@@ -1,6 +1,8 @@
 #ifndef RTS_H
 #define RTS_H
 
+#include "setjmp.h"
+
 #define UF_UPDATE 1
 #define UF_NOUPDATE 2
 
@@ -100,25 +102,41 @@ void freeHeap();
 
 // Back hole.
 StgFunPtr _black_hole_entry();
-static StgWord _blackHole_info[];
+StgWord _blackHole_info[1];
 
 // Indirection.
 StgFunPtr _indirection_entry();
-static StgWord _indirection_info[];
+StgWord _indirection_info[1];
+
+// Primitive addition.
+StgFunPtr _primIntAdd_entry();
+
+// Primitive multiplication.
+StgFunPtr _primIntMul_entry();
+
+// Wrapped integer info table.
+StgWord _wrappedInt_info[1];
+
+// Dump int closure.
+StgWord dumpInt_closure[1];
+
+// This is all that should be called in the C main.
+int runRTS(StgWord *main_closure, int argc, char const *argv[]);
 
 // Globals.
-static StgWord *node;  // Current closure. `node[0]` is the info table (StgWord *).
-static StgAddr *spA;  // Arg stack. Contains values. Grows upwards.
-static StgAddr *spB;  // COntrol stack. Contains return vectors (continuations) and update frames. Grows downwards.
-static StgAddr *spALim;  // Marks bottom of stack space.
-static StgAddr *spBLim;  // Marks top of stack space.
-static StgAddr *spABase;  // Marks bottom of ACTIVE stack space.
-static StgAddr *spBBase;  // Marks top of ACTIVE stack space.
-static StgAddr *hp;  // Heap pointer. Stores closures. Points to the next value to be allocated.
-static StgAddr *hpLim;  // Marks bottom of heap.
-static StgAddr *hpBack;  // Second heap pointer (for semi-space GC).
-static StgAddr *hpBackLim;  // Bottom of second heap (for semi-space GC).
-static StgInt rTag;  // Constructor tag register.
-static StgInt retInt;  // Primitive integer return register.
+StgWord *node;  // Current closure. `node[0]` is the info table (StgWord *).
+StgAddr *spA;  // Arg stack. Contains values. Grows upwards.
+StgAddr *spB;  // COntrol stack. Contains return vectors (continuations) and update frames. Grows downwards.
+StgAddr *spALim;  // Marks bottom of stack space.
+StgAddr *spBLim;  // Marks top of stack space.
+StgAddr *spABase;  // Marks bottom of ACTIVE stack space.
+StgAddr *spBBase;  // Marks top of ACTIVE stack space.
+StgAddr *hp;  // Heap pointer. Stores closures. Points to the next value to be allocated.
+StgAddr *hpLim;  // Marks bottom of heap.
+StgAddr *hpBack;  // Second heap pointer (for semi-space GC).
+StgAddr *hpBackLim;  // Bottom of second heap (for semi-space GC).
+StgInt rTag;  // Constructor tag register.
+StgInt retInt;  // Primitive integer return register.
+jmp_buf jmpEnv;  // longjmp ref.
 
 #endif
