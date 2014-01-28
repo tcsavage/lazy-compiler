@@ -45,8 +45,14 @@ mul = Binding "mul" (Lambda [] N ["x", "y"] (Prim PrimMul [AtomVar "x", AtomVar 
 double :: Binding
 double = Binding "double" (Lambda [] N [] (Ap "mul" [AtomLit 2]))
 
-stgmain :: Binding
-stgmain = Binding "main" (Lambda [] N [] (Let [Binding "x" (Lambda [] N [] (Ap "double" [AtomLit 8]))] (Ap "dumpInt" [AtomVar "x"])))
+stgmain1 :: Binding
+stgmain1 = Binding "main" (Lambda [] N [] (Let [Binding "x" (Lambda [] N [] (Ap "double" [AtomLit 8]))] (Ap "dumpInt" [AtomVar "x"])))
 
-stgmodule :: Program
-stgmodule = Program [mul, double, stgmain]
+stgmodule1 :: Program
+stgmodule1 = Program [mul, double, stgmain1]
+
+stgmain2 :: Binding
+stgmain2 = Binding "main" (Lambda [] N [] (Let [Binding "x" (Lambda [] N [] (Ap "double" [AtomLit 0]))] (Case (Ap "x" []) (Primitive [PAlt 0 (Ap "dumpInt" [AtomLit 9000])] (Default (Ap "dumpInt" [AtomLit 1337]))))))
+
+stgmodule2 :: Program
+stgmodule2 = Program [mul, double, stgmain2]
