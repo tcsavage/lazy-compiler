@@ -17,7 +17,12 @@ import STG
 compile :: Program -> String
 compile (Program bindings) = "#include \"RTS.h\"\n\n" ++ unlines (("//Decls." : map genDecl defs) ++ ("// Defs." : map genDef defs)) ++ "\nint main(int argc, char const *argv[]) { runRTS(main_closure, argc, argv); }\n"
     where
-        defs = concatMap buildGlobal bindings
+        defs = concatMap (buildGlobal (makeGlobalMap bindings)) bindings
+
+makeGlobalMap :: [Binding] -> M.Map Var Var
+makeGlobalMap = M.fromList . (++ builtIns) . map (\(Binding var _) -> (var, var ++ "_closure"))
+    where
+        builtIns = [("dumpInt", "dumpInt_closure")]
 
 -- Helper for building info table defs in abstract C.
 mkInfoTable :: String -> Def
@@ -28,8 +33,12 @@ mkStaticClosure :: String -> Def
 mkStaticClosure name = StaticArray (name ++ "_closure") "StgWord" [name ++ "_info"]
 
 -- Helper for building a static return vector.
-mkReturnVector :: String -> Def
-mkReturnVector name = StaticArray (name ++ "_retvec") "StgWord" [name ++ "_cont"]
+mkReturnVector :: String -> [String] -> Def
+mkReturnVector name branches = StaticArray (name ++ "_retvec") "StgWord" $ map (++ "_cont") branches
+
+-- Helper for building a static simple return vector.
+mkSimpleReturnVector :: String -> Def
+mkSimpleReturnVector name = StaticArray (name ++ "_retvec") "StgWord" [name ++ "_cont"]
 
 -- Helper for building entry code function defs in abstract C.
 mkEntryCode :: String -> [Statement] -> Def
@@ -40,12 +49,12 @@ mkContCode :: String -> [Statement] -> Def
 mkContCode name = Function (name ++ "_cont")
 
 -- | Generate abstract C for a top-level STG binding.
-buildGlobal :: Binding -> [Def]
-buildGlobal (Binding name lambda) = [infoTable, closure, entry]
+buildGlobal :: M.Map Var Var -> Binding -> [Def]
+buildGlobal globalMap (Binding name lambda) = [infoTable, closure, entry]
     where
         infoTable = mkInfoTable name
         closure = mkStaticClosure name
-        entry = mkEntryCode name $ buildEntry name lambda
+        entry = mkEntryCode name $ buildEntry globalMap name lambda
 
 type Unique = Int
 
@@ -73,16 +82,18 @@ genUnique = do
     put (Builder xs rt (un+1))
     pure ("u" ++ show un)
 
-buildStatements :: State Builder a -> [Statement]
-buildStatements comp = D.toList $ code $ execState comp $ Builder D.empty M.empty 0
+buildStatements :: State Builder a -> State Builder [Statement]
+buildStatements comp = do
+    rt <- gets renameTable
+    pure $ D.toList $ code $ execState comp $ Builder D.empty rt 0
 
 -- | Generate abstract C for a lambda form's entry code.
-buildEntry :: Var -> Lambda -> [Statement]
-buildEntry self (Lambda free update args expr) = buildStatements go
+buildEntry :: M.Map Var Var -> Var -> Lambda -> [Statement]
+buildEntry globalMap self (Lambda free update args expr) = D.toList $ code $ execState go $ Builder D.empty globalMap 0
     where
         go = do
             -- If the function is "main", we need to push a special continuation and return vector.
-            when (self == "main") $ buildCont self $ do
+            when (self == "main") $ buildCont "_root" $ do
                 -- Escape interpreter.
                 append $ Code "longjmp(jmpEnv, 1)"
             -- Collect free variables from closure.
@@ -95,8 +106,9 @@ buildEntry self (Lambda free update args expr) = buildStatements go
 -- | Generate abstract C for building a simple continuation return vector.
 buildCont :: Var -> State Builder () -> State Builder ()
 buildCont name code = do
-    append $ NestedDef $ mkReturnVector name
-    append $ NestedDef $ mkContCode name $ buildStatements code
+    append $ NestedDef $ mkSimpleReturnVector name
+    statements <- buildStatements code
+    append $ NestedDef $ mkContCode name statements
     append $ Code $ printf "pushB((StgAddr)%s_retvec)" name
 
 -- | Bind a free variable at an offset to a name.
@@ -114,11 +126,17 @@ buildExpr self (Let bindings expr) = do
     mapM_ (buildLetBinding self) bindings
     -- Build rest.
     buildExpr self expr
+buildExpr self (Case expr alts) = do
+    -- Build the return vector from the alternatives (and push it onto the stack).
+    buildCaseVectoredReturn self alts
+    -- Evaluate expression.
+    buildExpr self expr
 buildExpr self (Ap closure atoms) = do
     -- Push args onto stack.
     mapM_ (buildAtomPush self) atoms
     -- Enter closure.
-    append $ Code $ printf "node = %s_closure" closure
+    closure' <- getVar closure
+    append $ Code $ printf "node = %s" closure'
     append $ Code "ENTER(node)"
 buildExpr self (Prim prim atoms) = buildPrimCall self prim atoms
 
@@ -152,7 +170,8 @@ buildLetBinding parent (Binding name lambda@(Lambda frees update args expr)) = d
     let renamed = printf "%s_%s" parent name
     append $ NestedDef $ mkInfoTable renamed
     -- Build entry code.
-    append $ NestedDef $ mkEntryCode renamed $ buildEntry renamed lambda
+    rt <- gets renameTable
+    append $ NestedDef $ mkEntryCode renamed $ buildEntry rt renamed lambda
     -- Allocate the closure on the heap and make a local reference.
     buildHeapClosure parent name frees
     -- make a note in the builder state that this free variable has been renamed.
@@ -214,3 +233,40 @@ buildPrimCall self prim [a1, a2@(AtomVar a2var)] = do
 primMap :: Prim -> Var
 primMap PrimAdd = "_primIntAdd_entry"
 primMap PrimMul = "_primIntMul_entry"
+
+buildCaseVectoredReturn :: Var -> Alts -> State Builder ()
+buildCaseVectoredReturn self (Algebraic aalts def) = undefined
+buildCaseVectoredReturn self (Primitive palts def) = do
+    -- For each primitive alt...
+    names <- forM (zip palts [(0::Int)..]) $ \(PAlt lit expr, n) -> do
+        let name = printf "%s_alt%d" self n
+        -- Create the continuation.
+        statements <- buildStatements $ do
+            buildExpr self expr
+        append $ NestedDef $ mkContCode name statements
+        pure name
+    -- Build default alternative.
+    statements <- buildStatements $ do
+        buildDefaultPAlt self def
+    let defAltName = self ++ "_altDEF"
+    append $ NestedDef $ mkContCode defAltName statements
+    -- Create and push return vector.
+    append $ NestedDef $ mkReturnVector self (names ++ [defAltName])
+    append $ Code $ printf "pushB((StgAddr)%s_retvec)" self
+    -- Create and push switch return vector.
+    buildCont (self ++ "_switch") $ do
+        cases <- mapM buildPrimSwitchCase (zip palts [0..])
+        append $ Switch "retInt" cases (Just [Code $ printf "JUMP(((StgAddr *)popB())[%d])" $ length palts])
+
+buildPrimSwitchCase :: (PAlt, Int) -> State Builder (String, [Statement])
+buildPrimSwitchCase (PAlt lit _, n) = do
+    code <- buildStatements $ do
+        append $ Code $ printf "JUMP(((StgAddr *)popB())[%d])" n
+    pure (show lit, code)
+
+-- | Build code for default primitive alternative.
+buildDefaultPAlt :: Var -> DefAlt -> State Builder ()
+buildDefaultPAlt self (DefBinding name expr) = do
+    append $ Code $ printf "StgInt %s = retInt" name
+    buildExpr self expr
+buildDefaultPAlt self (Default expr) = buildExpr self expr
