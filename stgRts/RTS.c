@@ -132,6 +132,46 @@ StgFunPtr _wrappedInt_entry() {
 
 StgWord _wrappedInt_info[] = {(StgWord)_wrappedInt_entry};
 
+// Constructor 0.
+StgFunPtr _constructor0_entry() {
+    // Put tag into return register.
+    rTag = node[1];
+    // Jump to continuation.
+    JUMP(((StgAddr *)popB())[0]);
+}
+
+StgWord _constructor0_info[] = {(StgWord)_constructor0_entry};
+
+// Constructor 1.
+StgFunPtr _constructor1_entry() {
+    // Put tag into return register.
+    rTag = node[1];
+    // Jump to continuation.
+    JUMP(((StgAddr *)popB())[0]);
+}
+
+StgWord _constructor1_info[] = {(StgWord)_constructor1_entry};
+
+// Constructor 2.
+StgFunPtr _constructor2_entry() {
+    // Put tag into return register.
+    rTag = node[1];
+    // Jump to continuation.
+    JUMP(((StgAddr *)popB())[0]);
+}
+
+StgWord _constructor2_info[] = {(StgWord)_constructor2_entry};
+
+// Constructor 3.
+StgFunPtr _constructor3_entry() {
+    // Put tag into return register.
+    rTag = node[1];
+    // Jump to continuation.
+    JUMP(((StgAddr *)popB())[0]);
+}
+
+StgWord _constructor3_info[] = {(StgWord)_constructor3_entry};
+
 void dumpInt(StgInt x) {
     printf("dumpInt: %d\n", x);
 }

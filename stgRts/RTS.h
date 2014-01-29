@@ -117,6 +117,12 @@ StgFunPtr _primIntMul_entry();
 // Wrapped integer info table.
 StgWord _wrappedInt_info[1];
 
+// Constructor info tables.
+StgWord _constructor0_info[1];
+StgWord _constructor1_info[1];
+StgWord _constructor2_info[1];
+StgWord _constructor3_info[1];
+
 // Dump int closure.
 StgWord dumpInt_closure[1];
 
