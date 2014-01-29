@@ -52,7 +52,13 @@ stgmodule1 :: Program
 stgmodule1 = Program [mul, double, stgmain1]
 
 stgmain2 :: Binding
-stgmain2 = Binding "main" (Lambda [] N [] (Let [Binding "x" (Lambda [] N [] (Ap "double" [AtomLit 0]))] (Case (Ap "x" []) (Primitive [PAlt 0 (Ap "dumpInt" [AtomLit 9000])] (Default (Ap "dumpInt" [AtomLit 1337]))))))
+stgmain2 = Binding "main" (Lambda [] N [] (Let [Binding "x" (Lambda [] N [] (Ap "double" [AtomLit 8]))] (Case (Ap "x" []) (Primitive [PAlt 0 (Ap "dumpInt" [AtomLit 9000])] (DefBinding "z" (Ap "dumpInt" [AtomVar "z"]))))))
 
 stgmodule2 :: Program
 stgmodule2 = Program [mul, double, stgmain2]
+
+stgmain3 :: Binding
+stgmain3 = Binding "main" (Lambda [] N [] (Let [Binding "x" (Lambda [] N [] (Ap "double" [AtomLit 8])), Binding "y" (Lambda [] N [] (Constr 0 [AtomVar "x"]))] (Case (Ap "y" []) (Algebraic [AAlt 0 ["foo"] (Ap "dumpInt" [AtomVar "foo"])] (Default (Ap "dumpInt" [AtomLit 1337]))))))
+
+stgmodule3 :: Program
+stgmodule3 = Program [mul, double, stgmain3]
