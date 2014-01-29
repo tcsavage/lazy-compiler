@@ -48,7 +48,7 @@ data Statement = NestedDef Def
 genStatement :: Statement -> Maybe String
 genStatement (NestedDef _) = Nothing
 genStatement (Return expr) = Just $ printf " return %s;\n" expr
-genStatement (Switch base cases def) = Just $ printf " switch (%s) {\n%s}\n" base body
+genStatement (Switch base cases def) = Just $ printf " switch (%s) {\n%s }\n" base body
     where
         mkCase (value, code) = printf " case %s:\n%s break;\n" value $ concat $ catMaybes $ map genStatement code
         defaultCase Nothing = ""
