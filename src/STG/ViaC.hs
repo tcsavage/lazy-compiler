@@ -138,6 +138,8 @@ buildExpr self (Ap closure atoms) = do
     closure' <- getVar closure
     append $ Code $ printf "node = %s" closure'
     append $ Code "ENTER(node)"
+buildExpr self (Constr tag atoms) = do
+    buildConstructorClosure self tag atoms
 buildExpr self (Prim prim atoms) = buildPrimCall self prim atoms
 
 -- | Push an atom onto the argument stack.
@@ -146,8 +148,8 @@ buildAtomPush self (AtomVar var) = do
     var' <- getVar var
     append $ Code $ printf "pushA((StgAddr) %s)" var'
 --buildAtomPush self (AtomLit lit) = append $ Code $ printf "pushA((StgAddr) %d)" lit
-buildAtomPush self (AtomLit lit) = do
-    closure <- buildWrapLit self lit
+buildAtomPush self atom@(AtomLit lit) = do
+    closure <- buildWrapLit self atom
     append $ Code $ printf "pushA((StgAddr) %s)" closure
 
 -- | Build a new closure on the heap and bind it to a local name.
@@ -162,6 +164,24 @@ buildHeapClosure parent name frees = do
     append $ Code $ printf "StgWord *%s_%s_closure = (StgWord *) &hp[0]" parent name
     -- Increment heap pointer.
     append $ Code $ printf "hp += %d" (length frees + 1)
+
+buildConstructorClosure :: Var -> Constr -> [Atom] -> State Builder ()
+buildConstructorClosure self tag atoms = do
+    unique <- genUnique
+    -- Set info table.
+    append $ Code $ printf "hp[0] = &_constructor%d_info" $ length atoms
+    -- Set tag.
+    append $ Code $ printf "hp[1] = %d" tag
+    -- Set data.
+    forM_ (zip atoms [(2::Int)..]) $ \(atom, offset) -> case atom of
+        (AtomVar var) -> append $ Code $ printf "hp[%d] = %s" offset var
+        (AtomLit lit) -> do
+            litClosure <- buildWrapLit self (AtomLit lit)
+            append $ Code $ printf "hp[%d] = %s" offset litClosure
+    -- Name closure.
+    append $ Code $ printf "StgWord *%s_cons%d_%s_closure = (StgWord *) &hp[0]" self tag unique
+    -- Increment heap pointer.
+    append $ Code $ printf "hp += %d" (length atoms + 2)
 
 -- | Generate abstract C code for a let binding.
 buildLetBinding :: Var -> Binding -> State Builder ()
@@ -182,20 +202,22 @@ buildContinuationPop :: State Builder ()
 buildContinuationPop = append $ Code "JUMP(((StgAddr *)popB())[0])"
 
 -- | Build a closure wrapping a literal.
-buildWrapLit :: Var -> Literal -> State Builder Var
-buildWrapLit self lit = do
+buildWrapLit :: Var -> Atom -> State Builder Var
+buildWrapLit self atom = do
     unique <- genUnique
     append $ Code "hp[0] = &_wrappedInt_info"
-    append $ Code $ printf "hp[1] = (StgAddr)%d" lit
+    let val = case atom of AtomVar var -> var
+                           AtomLit lit -> show lit
+    append $ Code $ printf "hp[1] = (StgAddr)%s" val
     let closureName = printf "%s_%s_closure" self unique
     append $ Code $ printf "StgWord *%s = (StgWord *) &hp[0]" closureName
     append $ Code "hp += 2"
     pure $ closureName
 
 buildEvalAtomPush :: Var -> Atom -> State Builder () -> State Builder ()
-buildEvalAtomPush self (AtomLit x) bcont = do
+buildEvalAtomPush self atom@(AtomLit x) bcont = do
     -- Generate a new wrapper closure for this literal.
-    closure <- buildWrapLit self x
+    closure <- buildWrapLit self atom
     buildCont closure bcont
     -- Enter closure.
     append $ Code $ printf "node = %s" closure
@@ -235,7 +257,29 @@ primMap PrimAdd = "_primIntAdd_entry"
 primMap PrimMul = "_primIntMul_entry"
 
 buildCaseVectoredReturn :: Var -> Alts -> State Builder ()
-buildCaseVectoredReturn self (Algebraic aalts def) = undefined
+buildCaseVectoredReturn self (Algebraic aalts def) = do
+    -- For each algebraic alt...
+    names <- forM (zip aalts [(0::Int)..]) $ \(AAlt tag bindings expr, n) -> do
+        let name = printf "%s_alt%d" self n
+        -- Create the continuation.
+        statements <- buildStatements $ do
+            forM_ (zip bindings [(2::Int)..]) $ \(binder, offset) -> do
+                append $ Code $ printf "StgWord *%s = node[%d]" binder offset
+            buildExpr self expr 
+        append $ NestedDef $ mkContCode name statements
+        pure name
+    -- Build default alternative.
+    statements <- buildStatements $ do
+        buildDefaultAAlt self def
+    let defAltName = self ++ "_altDEF"
+    append $ NestedDef $ mkContCode defAltName statements
+    -- Create and push return vector.
+    append $ NestedDef $ mkReturnVector self (names ++ [defAltName])
+    append $ Code $ printf "pushB((StgAddr)%s_retvec)" self
+    -- Create and push switch return vector.
+    buildCont (self ++ "_switch") $ do
+        cases <- mapM buildAlgSwitchCase (zip aalts [0..])
+        append $ Switch "rTag" cases (Just [Code $ printf "JUMP(((StgAddr *)popB())[%d])" $ length aalts])
 buildCaseVectoredReturn self (Primitive palts def) = do
     -- For each primitive alt...
     names <- forM (zip palts [(0::Int)..]) $ \(PAlt lit expr, n) -> do
@@ -264,9 +308,24 @@ buildPrimSwitchCase (PAlt lit _, n) = do
         append $ Code $ printf "JUMP(((StgAddr *)popB())[%d])" n
     pure (show lit, code)
 
+buildAlgSwitchCase :: (AAlt, Int) -> State Builder (String, [Statement])
+buildAlgSwitchCase (AAlt tag _ _, n) = do
+    code <- buildStatements $ do
+        append $ Code $ printf "JUMP(((StgAddr *)popB())[%d])" n
+    pure (show tag, code)
+
 -- | Build code for default primitive alternative.
 buildDefaultPAlt :: Var -> DefAlt -> State Builder ()
 buildDefaultPAlt self (DefBinding name expr) = do
     append $ Code $ printf "StgInt %s = retInt" name
+    closure <- buildWrapLit self (AtomVar name)
+    renameVar name closure
     buildExpr self expr
 buildDefaultPAlt self (Default expr) = buildExpr self expr
+
+-- | Build code for default algebraic alternative.
+buildDefaultAAlt :: Var -> DefAlt -> State Builder ()
+buildDefaultAAlt self (DefBinding name expr) = do
+    append $ Code $ printf "StgWord *%s = node" name
+    buildExpr self expr
+buildDefaultAAlt self (Default expr) = buildExpr self expr
