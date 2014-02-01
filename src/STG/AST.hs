@@ -1,4 +1,4 @@
-module STG where
+module STG.AST where
 
 -- The following is the definition of the STG language.
 
