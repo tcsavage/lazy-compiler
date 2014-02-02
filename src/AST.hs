@@ -18,7 +18,7 @@ data Expr a = V a  -- Variable
             | L Int  -- Integer literal
             | Expr a :@ Expr a  -- Application
             | Lam a (Expr a)  -- Lambda
-            | Let Bool [(Ident, Expr a)] (Expr a)  -- Recursive let binding
+            | Let Bool [(Ident, Expr a)] (Expr a)  -- Let binding. (let rec if true)
             | Case (Expr a) Type [Alt a]
             | Constr Int Type [Expr a]  -- Data constructor (tag and type)
             | PrimFun PrimFun  -- Primitive function
