@@ -35,7 +35,7 @@ import Data.Monoid
 import Text.Printf
 
 import AbstractC
-import STG
+import STG.AST
 
 data CVar = Stack Var
           | Node Var Int
