@@ -85,7 +85,7 @@ insertIdents ((Id name ty):xs) map = insertIdents xs $ M.insert name ty map
 insertIdents [] map = map
 
 buildTypeMap :: [Decl] -> M.Map String Type
-buildTypeMap decls = M.fromList $ catMaybes $ map getType decls
+buildTypeMap decls = M.fromList $ (++ [("dumpInt", TyInt ~> TyInt)]) $ catMaybes $ map getType decls
     where
         getType (DTerm (Id name ty) _) = Just (name, ty)
         getType _ = Nothing
