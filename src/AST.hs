@@ -18,21 +18,29 @@ data Expr a = V a  -- Variable
             | L Int  -- Integer literal
             | Expr a :@ Expr a  -- Application
             | Lam a (Expr a)  -- Lambda
-            | Let Bool [(Ident, Expr a)] (Expr a)  -- Recursive let binding
+            | Let Bool [(Ident, Expr a)] (Expr a)  -- Let binding. (let rec if true)
+            | Case (Expr a) Type [Alt a]
+            | Constr Int Type [Expr a]  -- Data constructor (tag and type)
             | PrimFun PrimFun  -- Primitive function
             deriving (Eq,Ord,Show,Read)
 
 data Type = TyFun Type Type
           | TyInt
+          | TyVar Ident
+          | TyKindStar
           deriving (Eq,Ord,Show,Read)
 
 (~>) :: Type -> Type -> Type
 (~>) = TyFun
 
-data Decl = Decl { dident :: Ident, dval :: Expr Ident } deriving (Show, Eq)
+type Alt a = (Int, [a], Expr a)
 
-unDecl :: Decl -> (Ident, Expr Ident)
-unDecl (Decl i e) = (i, e)
+data Decl = DTerm { dident :: Ident, dval :: Expr Ident }
+          | DType { dident :: Ident, dconstrs :: [Ident] }
+          deriving (Show, Eq)
+
+--unDecl :: Decl -> (Ident, Expr Ident)
+--unDecl (Decl i e) = (i, e)
 
 data Ident = Id { name :: String
                 , typeOf :: Type
@@ -54,12 +62,20 @@ getArity (PrimFun op) = case op of
     PrimBinOp _ -> 2
 getArity _ = 0
 
+getTypeArity :: Type -> Int
+getTypeArity (TyFun _ r) = 1 + getTypeArity r
+getTypeArity _ = 0
+
 -- Module type.
 data Module = Module { _modName :: String
-                     , _tlDecls :: [(Ident, Expr Ident)]
+                     , _tlDecls :: [Decl]
                      } deriving (Show)
 
 makeLenses ''Module
 
-getTopLevelNames :: Module -> [String]
-getTopLevelNames = nub . map (name . fst) . _tlDecls
+--getTopLevelNames :: Module -> [String]
+--getTopLevelNames = nub . map (name . dval) . _tlDecls
+
+returnType :: Type -> Type
+returnType (TyFun _ r) = returnType r
+returnType x = x

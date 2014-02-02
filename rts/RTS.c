@@ -1,228 +1,220 @@
-#include <stdio.h>
-#include "Memory.h"
-#include "MemoryDefs.h"
 #include "RTS.h"
+#include "stdlib.h"
+#include "stdio.h"
 
-// Stack environment.
+StgFunPtr cont;
 
-void printNode(Node *node);
+void run() {
+    while (1) {  // Can be replaced with infinite loop (main_cont will need to longjmp to cleanup code).
+        cont = (StgFunPtr)(cont)();
+    }
+    UNREACHABLE("after `run` loop");
+}
 
-void doUnwind(Instruction *ins);
+void initStacks(int size) {
+    size_t realsize = size*sizeof(StgAddr);
+    spALim = spABase = spA = malloc(realsize);
+    spBLim = spBBase = spB = spALim + realsize;
+}
 
-void printNode(Node *node) {
-    switch (node->nodeType) {
-        case NODE_NUM:
-            ;
-            NodeInt *ni = (NodeInt *) node->addr;
-            printf("Integer node: %d\n", ni->value);
+void freeStacks() {
+    free(spALim);
+}
+
+inline StgAddr allocClosure(StgWord *closure) {
+
+}
+
+void initHeap(int size) {
+    size_t realsize = size*sizeof(StgAddr);
+    hpLim = hp = malloc(realsize);
+}
+
+void freeHeap() {
+    free(hpLim);
+}
+
+inline StgAddr popA() {
+    --spA;
+    return spA[0];
+}
+
+inline StgAddr peekA() {
+    return spA[-1];
+}
+
+inline void pushA(StgAddr v) {
+    spA[0] = v;
+    ++spA;
+}
+
+inline StgAddr popB() {
+    ++spB;
+    return spB[0];
+}
+
+inline StgAddr peekB() {
+    return spB[1];
+}
+
+inline void pushB(StgAddr v) {
+    spB[0] = v;
+    --spB;
+}
+
+Value *mkValueInt(StgInt data) {
+    Value *val = (Value *) malloc(sizeof(Value));
+    val->type = VALUE_PINT;
+    val->data.primInt = data;
+    return val;
+}
+
+Value *mkValueAddr(StgAddr data) {
+    Value *val = (Value *) malloc(sizeof(Value));
+    val->type = VALUE_ADDR;
+    val->data.closure = data;
+    return val;
+}
+
+void printValue(Value *val) {
+    switch (val->type) {
+        case VALUE_PINT:
+            printf("Int value: %d\n", val->data.primInt);
             break;
-        case NODE_AP:
-            printf("Application node\n");
-            break;
-        case NODE_GLOBAL:
-            ;
-            NodeGlobal *ng = (NodeGlobal *) node->addr;
-            printf("Global node (arity %d)\n", ng->arity);
-            break;
-        case NODE_IND:
-            ;
-            NodeInd *nin = (NodeInd *) node->addr;
-            printf("Indirection node... ");
-            printNode(nin->ptr);
+        case VALUE_ADDR:
+            printf("Closure value: %p\n", val->data.closure);
             break;
         default:
-            printf("Error: Unknown node type.\n");
-            exit(1);
+            printf("Unknown value type.\n");
     }
 }
 
-void pdfStack() {
-    Node *n = sPop();
-    while (n != NULL) {
-        printNode(n);
-        freeNode(n);
-        n = sPop();
-    }
+// Black hole entry code.
+StgFunPtr _black_hole_entry() {
+    printf("Black hole error.\n");
+    exit(1);
 }
 
-Node *getArg(Node *ap) {
-    if (ap->nodeType == NODE_AP) {
-        NodeAp *apn = (NodeAp *) ap->addr;
-        return apn->rhs;
-    } else {
-        printf("Tried to get arg of non-function.\n");
-        exit(1);
-    }
+StgWord _blackHole_info[] = {(StgWord)_black_hole_entry};
+
+// An indirection closure stores a value pointer after the info table.
+StgFunPtr _indirection_entry() {
+    JUMP(node[1]);
 }
 
-void decodeAndRun(Instruction *ins) {
-    int i;
-    switch (ins->instType) {
-        case INS_END:
-            printf("Attempted to run END instruction. This shouldn't ever happen.\n");
-            exit(1);
-            break;
-        case INS_PUSHGLOBAL:
-            sPush(globalTable[ins->arg]);
-            break;
-        case INS_PUSHINT:
-            ;
-            Node *newInt = mkNodeInt(ins->arg);
-            sPush(newInt);
-            break;
-        case INS_PUSH:
-            ;
-            Node *arg = sIndex(ins->arg);
-            sPush(arg);
-            break;
-        case INS_MKAP:
-            ;
-            Node *a = sPop();
-            Node *b = sPop();
-            sPush(mkNodeAp(a, b));
-            break;
-        case INS_SLIDE:
-            ;
-            Node *x = sPop();
-            for (i = 0; i < ins->arg; ++i) {
-                sPop();
-            }
-            sPush(x);
-            break;
-        case INS_ALLOC:
-            ;
-            for (i = 0; i < ins->arg; ++i) {
-                sPush(mkNodeInd(NULL));
-            }
-            break;
-        case INS_UPDATE:
-            ;
-            if (ins->arg > 0) {
-                Node *top = sPop();
-                sReplace(ins->arg, mkNodeInd(top));
-            }
-            break;
-        case INS_POP:
-            ;
-            for (i = 0; i < ins->arg; ++i) {
-                sPop();
-            }
-            break;
-        case INS_UNWIND:
-            doUnwind(ins);
-            break;
-        case INS_EVAL:
-            dumpPush();
-            break;
-        case INS_ADD:
-            ;
-            Node *l1 = sPop();
-            Node *r1 = sPop();
-            if (l1->nodeType == NODE_NUM) {
-                NodeInt *li1 = (NodeInt *) l1->addr;
-                if (r1->nodeType == NODE_NUM) {
-                    NodeInt *ri1 = (NodeInt *) r1->addr;
-                    sPush(mkNodeInt(li1->value + ri1->value));
-                } else {
-                    printf("Tried to perform addition on non-integer node.\n");
-                }
-            } else {
-                printf("Tried to perform addition on non-integer node.\n");
-            }
-            break;
-        case INS_MUL:
-            ;
-            Node *l2 = sPop();
-            Node *r2 = sPop();
-            if (l2->nodeType == NODE_NUM) {
-                NodeInt *li2 = (NodeInt *) l2->addr;
-                if (r2->nodeType == NODE_NUM) {
-                    NodeInt *ri2 = (NodeInt *) r2->addr;
-                    sPush(mkNodeInt(li2->value * ri2->value));
-                } else {
-                    printf("Tried to perform multiplication on non-integer node.\n");
-                }
-            } else {
-                printf("Tried to perform multiplication on non-integer node.\n");
-            }
-            break;
-        default:
-            printf("Unknown instruction.\n");
-            exit(1);
-    }
+StgWord _indirection_info[] = {(StgWord)_indirection_entry};
+
+// Primitive addition.
+StgFunPtr _primIntAdd_entry() {
+    // Expects a primitive integer argument on the stack. Puts result into primitive integer return register.
+    StgInt x = (StgInt)popA();  // Pop argument from stack.
+    StgInt y = (StgInt)popA();  // Pop argument from stack.
+    retInt = x+y;  // Set integer return register.
+    JUMP(((StgAddr *)popB())[0]);  // Pop return vector and jump to the continuation.
 }
 
-// Rearrange the stack.
-void rearrange(int n) {
-    int i;
-    for (i = 0; i < n; ++i) {
-        Node *n = sIndex(i+1);
-        sReplace(i, getArg(n));
-    }
+// Primitive multiplication.
+StgFunPtr _primIntMul_entry() {
+    // Expects a primitive integer argument on the stack. Puts result into primitive integer return register.
+    StgInt x = (StgInt)popA();  // Pop argument from stack.
+    StgInt y = (StgInt)popA();  // Pop argument from stack.
+    retInt = x*y;  // Set integer return register.
+    JUMP(((StgAddr *)popB())[0]);  // Pop return vector and jump to the continuation.
 }
 
-void doUnwind(Instruction *ins) {
-    // printf("Unwinding...\n");
-    Node *head = sPeek();
-    switch (head->nodeType) {
-        case NODE_NUM:
-            dumpRestore();
-            break;
-        case NODE_AP:
-            // printf("AP.\n");
-            while (head->nodeType == NODE_AP) {
-                NodeAp *ap = (NodeAp *) head->addr;
-                sPush(ap->lhs);
-                head = ap->lhs;
-            }
-            doUnwind(ins);
-            break;
-        case NODE_GLOBAL:
-            ;
-            // printf("GLOBAL\n");
-            NodeGlobal *global = (NodeGlobal *) head->addr;
-            rearrange(global->arity);
-            activeEnv->code = global->code;
-            activeEnv->offset = -1;
-            break;
-        case NODE_IND:
-            ;
-            // printf("IND\n");
-            NodeInd *ind = (NodeInd *) head->addr;
-            sPop();
-            sPush(ind->ptr);
-            doUnwind(ins);
-    }
+// Wrapped integer entry.
+StgFunPtr _wrappedInt_entry() {
+    // Put enclosed integer into return register.
+    retInt = node[1];
+    // Jump to continuation.
+    JUMP(((StgAddr *)popB())[0]);
 }
 
-int run(Instruction *insStart, Node *globals[]) {
-    // Init dump.
-    dump = mkDump(stackSize);
+StgWord _wrappedInt_info[] = {(StgWord)_wrappedInt_entry};
 
-    // Init env.
-    activeEnv = mkEnv();
-    activeStack = mkStack(stackSize);
-    activeEnv->stack = activeStack;
-    activeEnv->code = insStart;
-    activeEnv->offset = 0;
+// Constructor 0.
+StgFunPtr _constructor0_entry() {
+    // Put tag into return register.
+    rTag = node[1];
+    // Jump to continuation.
+    JUMP(((StgAddr *)popB())[0]);
+}
 
-    globalTable = globals;
+StgWord _constructor0_info[] = {(StgWord)_constructor0_entry};
 
-    while (activeEnv->code[activeEnv->offset].instType != INS_END) {
-        // printf("%d : %d\n", activeEnv->code[activeEnv->offset].instType, activeEnv->code[activeEnv->offset].arg);
-        decodeAndRun(&activeEnv->code[activeEnv->offset]);
-        activeEnv->offset++;
-        // gcMark();
-        // gcSweep();
+// Constructor 1.
+StgFunPtr _constructor1_entry() {
+    // Put tag into return register.
+    rTag = node[1];
+    // Jump to continuation.
+    JUMP(((StgAddr *)popB())[0]);
+}
+
+StgWord _constructor1_info[] = {(StgWord)_constructor1_entry};
+
+// Constructor 2.
+StgFunPtr _constructor2_entry() {
+    // Put tag into return register.
+    rTag = node[1];
+    // Jump to continuation.
+    JUMP(((StgAddr *)popB())[0]);
+}
+
+StgWord _constructor2_info[] = {(StgWord)_constructor2_entry};
+
+// Constructor 3.
+StgFunPtr _constructor3_entry() {
+    // Put tag into return register.
+    rTag = node[1];
+    // Jump to continuation.
+    JUMP(((StgAddr *)popB())[0]);
+}
+
+StgWord _constructor3_info[] = {(StgWord)_constructor3_entry};
+
+void dumpInt(StgInt x) {
+    printf("dumpInt: %d\n", x);
+}
+
+StgFunPtr dumpInt_cont() {
+    dumpInt(retInt);  // Get the value from the integer return register and dump it.
+    JUMP(((StgAddr *)popB())[0]);  // Jump to the continuation in the return vector atop the stack.
+}
+
+StgWord dumpInt_retvec[] = {(StgWord)dumpInt_cont};
+
+StgFunPtr dumpInt_entry() {
+    node = popA();  // Pop arg.
+    pushB((StgAddr)dumpInt_retvec);  // Push return vector.
+    ENTER(node);  // Eval the arg.
+}
+
+StgWord dumpInt_info[] = {(StgWord)dumpInt_entry};
+
+StgWord dumpInt_closure[] = {(StgWord)dumpInt_info};
+
+StgFunPtr start() {
+    // Enter main closure.
+    ENTER(node);
+}
+
+int runRTS(StgWord *main_closure, int argc, char const *argv[])
+{
+    // Set-up the environment.
+    initStacks(256);
+    initHeap(256);
+    node = main_closure;
+    cont = (StgFunPtr)start;  // Set initial code label to `start`.
+
+    int exiting;  // Variable for tracking longjmp.
+    exiting = setjmp(jmpEnv);  // longjmp re-entry point.
+    if (!exiting) {
+        run();  // Run the mini-interpreter.
+        UNREACHABLE("after `run`");
     }
 
-    printNode(sPeek());
-    int allocSize = listSize(allocList);
-    printf("Final memory usage: %d nodes (%d bytes)\n", allocSize, allocSize*sizeof(Node));
-
-    // Cleanup.
-    // pdfStack();
-    quitMemoryManager();
-    freeEnv(activeEnv);
+    // Tidy-up and exit.
+    freeHeap();
+    freeStacks();
     return 0;
 }

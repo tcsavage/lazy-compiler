@@ -1,0 +1,26 @@
+module Data where
+
+i : Int -> Int = \x:Int. x:Int
+k : Int -> Int -> Int = \x:Int. \y:Int. x:Int
+
+alwaysFive : Int -> Int = k:(Int -> Int -> Int) @ 5
+
+data List where
+    Null : List;  -- Pack{0}:List
+    Cons : Int -> List -> List  -- Pack{1}:Int->List->List @ x:Int @ xs:List
+end
+
+data Maybe where
+    Nothing : Maybe;
+    Just : Int -> Maybe
+end
+
+-- DType (Id "List" TyKindStar) [TyVar (Id "List" TyKindStar), TyFun TyInt (TyFun (TyVar (Id "List" TyKindStar)) (TyVar (Id "List" TyKindStar)))]
+
+singleton : Int -> List = \x:Int. Pack{1, Int->List->List}{x:Int, Pack{0, List}{}}
+
+head : List -> Int = \lst:List. case lst:List of Int where <0> -> 0 ; <1> <x:Int> <xs:List> -> x:Int end
+
+testList : List = singleton : Int -> List @ ((\x:Int. x:Int) @ 76)
+
+main : Int = head : List -> Int @ testList : List

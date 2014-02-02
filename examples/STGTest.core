@@ -1,0 +1,7 @@
+module STGTest where
+
+mul : Int -> Int -> Int = \x:Int. \y:Int. Mul# @ x:Int @ y:Int
+
+double : Int -> Int = mul:Int->Int->Int @ 2
+
+main : Int = dumpInt:Int->Int @ (double:Int->Int @ (double:Int->Int @ 2))
