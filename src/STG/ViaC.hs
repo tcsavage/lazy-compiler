@@ -1,6 +1,6 @@
 {-# LANGUAGE PackageImports #-}
 
-module STG.ViaC where
+module STG.ViaC (compile) where
 
 import Control.Applicative
 import Control.Monad
@@ -12,7 +12,7 @@ import Data.Monoid
 import Text.Printf
 
 import AbstractC
-import STG
+import STG.AST
 import STG.ViaC.Builder
 
 -- | Generate a C program from an STG AST.
