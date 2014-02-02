@@ -1,9 +1,12 @@
-module STG.PrettyPrint (pp) where
+module STG.PrettyPrint (ppStg) where
 
 import Data.List
 import Text.Printf
 
-import STG
+import STG.AST
+
+ppStg :: Program -> String
+ppStg = pp
 
 class PrettyPrint a where
     pp :: a -> String
