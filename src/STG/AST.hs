@@ -4,13 +4,13 @@ module STG.AST where
 
 type Var = String
 
-data Program = Program [Binding]
+data Program = Program [Binding] deriving (Show, Eq)
 
-data Binding = Binding Var Lambda
+data Binding = Binding Var Lambda deriving (Show, Eq)
 
-data Lambda = Lambda [Var] UpdateFlag [Var] Expr
+data Lambda = Lambda [Var] UpdateFlag [Var] Expr deriving (Show, Eq)
 
-data UpdateFlag = U | N
+data UpdateFlag = U | N deriving (Show, Eq)
 
 data Expr = Let [Binding] Expr
           | LetRec [Binding] Expr
@@ -19,25 +19,29 @@ data Expr = Let [Binding] Expr
           | Constr Constr [Atom]
           | Prim Prim [Atom]
           | Literal Literal
+          deriving (Show, Eq)
 
 type Constr = Int
 
 data Alts = Algebraic [AAlt] DefAlt
           | Primitive [PAlt] DefAlt
+          deriving (Show, Eq)
 
-data AAlt = AAlt Constr [Var] Expr
+data AAlt = AAlt Constr [Var] Expr deriving (Show, Eq)
 
-data PAlt = PAlt Literal Expr
+data PAlt = PAlt Literal Expr deriving (Show, Eq)
 
 data DefAlt = DefBinding Var Expr
             | Default Expr
+            deriving (Show, Eq)
 
 type Literal = Int
 
-data Prim = PrimAdd | PrimMul
+data Prim = PrimAdd | PrimMul deriving (Show, Eq)
 
 data Atom = AtomVar Var
           | AtomLit Literal
+          deriving (Show, Eq)
 
 mul :: Binding
 mul = Binding "mul" (Lambda [] N ["x", "y"] (Prim PrimMul [AtomVar "x", AtomVar "y"]))
