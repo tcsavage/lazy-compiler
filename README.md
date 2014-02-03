@@ -1,7 +1,7 @@
 simplelang
 ==========
 
-A simple lazy language running on the "G-Machine" abstract machine [Augustsson 1987, Johnsson 1987] implemented in Haskell and C. The goal is to build a simple, easy-to-understand compiler for a small, lazy core language (similar to GHC core) to use as a platform for experimentation with larger source languages.
+A simple lazy language compiled to C via STG [Peyton Jones & Salkild 1989]; implemented in Haskell and C. The goal is to build a simple, easy-to-understand compiler for a small, lazy core language (similar to GHC core) to use as a platform for experimentation with larger source languages.
 
 Todo
 ----
@@ -9,7 +9,7 @@ Todo
 * ~~Core => GCode compiler~~
 * ~~GCode interpreter~~
 * ~~GCode compiler (to C)~~
-* Replace G-Machine with STG [Peyton Jones & Salkild 1989]
+* ~~Replace G-Machine with STG [Peyton Jones & Salkild 1989]~~
 * LLVM backend
 * Extend core language to System-F [Reynolds 1974]
 
@@ -20,11 +20,9 @@ Usage
 
 Backends:
 
-* *-bi* - Interpreter. Generates and interprets GCode, printing the final value only.
-* *-biv* - Interpreter (verbose). Generates and interprets GCode, printing each state as it goes.
-* *-bviac* - Generate C code (from GCode). Requires `RTS.h` and must be compiled with `RTS.c`.
+* *-bviac* - Generate C code (from STG). Requires `RTS.h` and must be compiled with `RTS.c`.
 * *-bpp* - Pretty print core code.
-* *-bppgc* - Generate and pretty print GCode.
+* *-bppstg* - Generate and pretty print STG code.
 
 Directories
 -----------
@@ -42,10 +40,7 @@ Modules
 -------
 
 * *AST* - Core language syntax tree and helpter functions.
-* *Compiler* - Generates GCode from core.
-* *GMachine* - Defines GCode instructions.
-* *GMachine.Interpreter* - Interpreter for GCode.
-* *GMachine.ViaC* - Generates C code from GCode.
 * *Parsec* - Parsec parser for core.
 * *PrettyPrinter* - Functions for pretty printing of core AST.
+* *STG* - STG generation, pretty printing and compilation.
 * *TypeCheck* - Type-checks core AST.
