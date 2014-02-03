@@ -21,9 +21,11 @@ compile (Program bindings) = "#include \"RTS.h\"\n\n" ++ unlines (("//Decls." : 
     where
         defs = concatMap (buildGlobal (makeGlobalMap bindings)) bindings
 
+-- | Build a map of variables from a list of top-level bindings,
 makeGlobalMap :: [Binding] -> M.Map Var CVar
 makeGlobalMap = M.fromList . (++ builtIns) . map (\(Binding var _) -> (var, Global var (var ++ "_closure")))
     where
+        -- Register dumpInt as a built-in.
         builtIns = [("dumpInt", Global "dumpInt" "dumpInt_closure")]
 
 -- Helper for building info table defs in abstract C.
@@ -93,7 +95,6 @@ buildExpr self (Ap closure atoms) = do
     -- Push args onto stack.
     mapM_ (buildAtomPush self) atoms
     -- Enter closure.
-    --closure' <- getVarRef closure
     closure' <- getVarRef closure
     append $ Code $ printf "node = %s" closure'
     append $ Code "ENTER(node)"
@@ -173,12 +174,14 @@ buildCaseVectoredReturn self (Primitive palts def) = do
 buildAlgSwitchCase :: (AAlt, Int) -> BuilderM (String, [Statement])
 buildAlgSwitchCase (AAlt tag _ _, n) = do
     code <- buildStatements $ do
+        -- Pop return vector and jump to continuation for this alt.
         append $ Code $ printf "JUMP(((StgAddr *)popB())[%d])" n
     pure (show tag, code)
 
 buildPrimSwitchCase :: (PAlt, Int) -> BuilderM (String, [Statement])
 buildPrimSwitchCase (PAlt lit _, n) = do
     code <- buildStatements $ do
+        -- Pop return vector and jump to continuation for this alt.
         append $ Code $ printf "JUMP(((StgAddr *)popB())[%d])" n
     pure (show lit, code)
 
@@ -223,10 +226,12 @@ buildConstructorClosure self tag atoms = do
 -- | Build abstract C code for calling a primitive function provided by the RTS.
 buildPrimCall :: Var -> Prim -> [Atom] -> BuilderM ()
 buildPrimCall self prim [AtomLit x, AtomLit y] = do
+    -- When we have two literal atoms, push both and jump straight to the primop code.
     buildAtomPush self $ AtomLit x
     buildAtomPush self $ AtomLit y
     append $ Code $ printf "JUMP(%s)" $ primMap prim
 buildPrimCall self prim [a1, a2@(AtomLit y)] = do
+    -- When first arg is var atom and second is literal, eval and push first, push second, and jump to primop.
     buildEvalAtomPush self a1 $ do
         tempName <- ("temp_"++) <$> genUnique
         pushReg tempName IntReturn
@@ -243,6 +248,7 @@ buildPrimCall self prim [a1, a2@(AtomVar a2var)] = do
             pushReg tempName2 IntReturn
             append $ Code $ printf "JUMP(%s)" $ primMap prim
 
+-- | Simple mapping of primops to entry code names.
 primMap :: Prim -> Var
 primMap PrimAdd = "_primIntAdd_entry"
 primMap PrimMul = "_primIntMul_entry"
@@ -262,6 +268,7 @@ buildAtomPush self (AtomLit lit) = do
     closure <- buildBoxedLit self lit
     pushVar closure
 
+-- | Evaluate atom and push result.
 buildEvalAtomPush :: Var -> Atom -> BuilderM () -> BuilderM ()
 buildEvalAtomPush self (AtomLit x) bcont = do
     -- Generate a new wrapper closure for this literal.
@@ -291,6 +298,7 @@ buildBoxedLit self lit = do
     newLocal closureName closureName
     pure closureName
 
+-- | Build a closure wrapping the value of a register.
 buildBoxedReg :: Var -> Register -> BuilderM CVar
 buildBoxedReg name reg = do
     unique <- genUnique
