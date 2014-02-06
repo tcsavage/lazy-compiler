@@ -1,0 +1,5 @@
+module PolymorphicTest where
+
+i : forall a. a -> a = /\a. \x:a. x:a
+
+main : Int = dumpInt:Int->Int @ (i:(forall a. a -> a) @ <Int> @ 5)
