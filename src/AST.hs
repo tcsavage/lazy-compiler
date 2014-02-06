@@ -19,16 +19,21 @@ data Expr a = V a  -- Variable
             | Expr a :@ Expr a  -- Application
             | Lam a (Expr a)  -- Lambda
             | Let Bool [(Ident, Expr a)] (Expr a)  -- Let binding. (let rec if true)
-            | Case (Expr a) Type [Alt a]
+            | Case (Expr a) Type [Alt a]  -- Case expression
             | Constr Int Type [Expr a]  -- Data constructor (tag and type)
             | PrimFun PrimFun  -- Primitive function
+            | Type Type  -- Type argument to bug lambda
             deriving (Eq,Ord,Show,Read)
 
 data Type = TyFun Type Type
           | TyInt
           | TyVar Ident
+          | TyAp Type Type
+          | TyForAll Ident Type
           | TyKindStar
           deriving (Eq,Ord,Show,Read)
+
+type Kind = Type
 
 (~>) :: Type -> Type -> Type
 (~>) = TyFun
@@ -44,7 +49,11 @@ data Decl = DTerm { dident :: Ident, dval :: Expr Ident }
 
 data Ident = Id { name :: String
                 , typeOf :: Type
-                } deriving (Eq,Ord,Show,Read)
+                } 
+           | TyId { name :: String
+                  , kindOf :: Kind
+                  }
+           deriving (Eq,Ord,Show,Read)
 
 data PrimFun = PrimBinOp PrimBinOp
              deriving (Eq,Ord,Show,Read)
@@ -79,3 +88,13 @@ makeLenses ''Module
 returnType :: Type -> Type
 returnType (TyFun _ r) = returnType r
 returnType x = x
+
+applyType :: Type -> Type -> Type
+applyType (TyForAll ident ty1) ty2 = replaceIdent ident ty2 ty1
+    where
+        replaceIdent ident target (TyFun tyl tyr) = TyFun (replaceIdent ident target tyl) (replaceIdent ident target tyr)
+        replaceIdent ident target (TyInt) = TyInt
+        replaceIdent ident target ty@(TyVar tyident) = if ident == tyident then target else ty
+        replaceIdent ident target (TyAp tyl tyr) = undefined
+        replaceIdent ident target ty@(TyForAll tyident tyin) = if ident == tyident then replaceIdent ident target tyin else ty
+        replaceIdent ident target (TyKindStar) = TyKindStar

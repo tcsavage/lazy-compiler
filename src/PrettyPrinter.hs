@@ -16,11 +16,13 @@ ppDecl (DType ident constrs) = printf "data %s where\n%send" (ppIdent ident) (un
 
 ppIdent :: Ident -> String
 ppIdent (Id name ty) = printf "%s:%s" name (ppType ty)
+ppIdent (TyId name ki) = printf "%s:%s" name (ppType ki)
 
 ppType :: Type -> String
 ppType TyInt = "Int"
 ppType (TyFun l r) = printf "(%s -> %s)" (ppType l) (ppType r)
 ppType (TyVar ident) = printf "%s" (ppIdent ident)
+ppType (TyForAll ident ty) = printf "forall %s. %s" (ppIdent ident) (ppType ty)
 ppType TyKindStar = "*"
 
 ppExpr :: Expr Ident -> String
@@ -40,6 +42,7 @@ ppExpr (Constr tag ty values) = printf "Pack{%d, %s}{%s}" tag (ppType ty) values
     where
         valuesStr = intercalate ", " $ map ppExpr values
 ppExpr (PrimFun pf) = ppPrimFun pf
+ppExpr (Type ty) = ppType ty
 
 ppPrimFun :: PrimFun -> String
 ppPrimFun (PrimBinOp op) = ppPrimBinOp op
