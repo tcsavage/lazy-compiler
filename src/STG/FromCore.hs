@@ -172,7 +172,7 @@ core2stg (Core.Module name decls) = STG.Program $ catMaybes $ map (translateDecl
 
 translateDecl :: [String] -> Core.Decl -> Maybe STG.Binding
 translateDecl _ (Core.DType _ _) = Nothing
-translateDecl globals (Core.DTerm ident expr) = Just $ STG.Binding (Core.name ident) $ runTranslatorM globals $ translateLambda expr
+translateDecl globals (Core.DTerm ident expr) = Just $ STG.Binding (Core.name ident) $ runTranslatorM globals $ translateLambda $ stripTypeAbstractions expr
 
 translateLambda :: Core.Expr Core.Ident -> TranslatorM STG.Lambda
 translateLambda (Core.Lam binder expr) = do
@@ -265,3 +265,23 @@ translatePrimFun :: Core.PrimFun -> STG.Prim
 translatePrimFun (Core.PrimBinOp pbo) = case pbo of
     Core.PrimAdd -> STG.PrimAdd
     Core.PrimMul -> STG.PrimMul
+
+-- | Remove all big lambdas and type applications.
+stripTypeAbstractions :: Core.Expr Core.Ident -> Core.Expr Core.Ident
+stripTypeAbstractions (Core.Lam (Core.TyId name ki) expr) = stripTypeAbstractions expr
+stripTypeAbstractions (l :@ (Core.Type ty)) = stripTypeAbstractions l
+stripTypeAbstractions expr@(Core.V ident) = expr
+stripTypeAbstractions expr@(Core.L lit) = expr
+stripTypeAbstractions (l :@ r) = stripTypeAbstractions l :@ stripTypeAbstractions r
+stripTypeAbstractions (Core.Lam ident expr) = Core.Lam ident $ stripTypeAbstractions expr
+stripTypeAbstractions (Core.Let rec bindings expr) = Core.Let rec (map strip bindings) $ stripTypeAbstractions expr
+    where
+        strip :: (Core.Ident, Core.Expr Core.Ident) -> (Core.Ident, Core.Expr Core.Ident)
+        strip (ident, expr) = (ident, stripTypeAbstractions expr)
+stripTypeAbstractions (Core.Case expr ty alts) = (Core.Case (stripTypeAbstractions expr) ty (map strip alts))
+    where
+        strip :: Core.Alt Core.Ident -> Core.Alt Core.Ident
+        strip (tag, binders, expr) = (tag, binders, stripTypeAbstractions expr)
+stripTypeAbstractions (Core.Constr tag ty exprs) = Core.Constr tag ty $ map stripTypeAbstractions exprs
+stripTypeAbstractions expr@(Core.PrimFun prim) = expr
+stripTypeAbstractions expr@(Core.Type ty) = expr
