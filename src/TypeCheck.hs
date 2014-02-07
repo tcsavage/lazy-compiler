@@ -4,7 +4,7 @@ module TypeCheck where
 
 import Control.Applicative
 import Control.Monad
-import "mtl" Control.Monad.Reader
+import "mtl" Control.Monad.State
 import qualified Data.Map as M
 import Data.Maybe
 import Text.Printf
@@ -12,80 +12,149 @@ import Text.Printf
 import AST
 import PrettyPrinter
 
-checkModule :: Module -> Module
-checkModule m@(Module _ decls) = if runReader (and <$> mapM typecheck decls) $ buildTypeMap decls then m else m
+-- | Check types. Simple enough.
+typecheck :: Module -> Module
+typecheck m = let (m', state) = runState (processModule m) (TypeCheck (M.fromList $ getTopLevelTermTypes m) [])
+              in case errors state of
+                [] -> m'
+                es -> error $ unlines $ reverse es
 
-typecheck :: Decl -> Reader (M.Map String Type) Bool
-typecheck (DTerm (Id name ty) expr) = do
-    ty2 <- getType expr
-    case ty == ty2 of
-        True -> pure True
-        False -> error $ printf "Type mismatch. Decl `%s` has type %s but its definition has type %s." name (ppType ty) (ppType ty2)
-typecheck (DType ident@(Id name kind) constrs) = do
-    case all (\(Id name ty) -> returnType ty == (TyVar ident)) constrs of
-        True -> pure True
-        False -> error $ printf "Data constructor must return type `%s`" name
+data TypeCheck = TypeCheck { namespace :: M.Map String Type, errors :: [String] }
 
-getType :: Expr Ident -> Reader (M.Map String Type) Type
-getType (L _) = pure TyInt
-getType (Lam ident expr) = do
-    eTy <- local (insertIdent ident) $ getType expr
-    pure $ typeOf ident ~> eTy
-getType (V ident) = do
-    env <- M.lookup (name ident) <$> ask
-    case env of
-        Nothing -> error $ printf "Identifier %s not in scope." (name ident)
+type TypeCheckM a = State TypeCheck a
+
+-- | Run an action inside its own inner scope. All types mapped inside this scope will not be accessible outside.
+subScope :: TypeCheckM a -> TypeCheckM a
+subScope action = do
+    oldMap <- gets namespace
+    r <- action
+    modify (\state -> state { namespace = oldMap })
+    pure r
+
+-- | Add a type to the namespace map.
+addName :: String -> Type -> TypeCheckM ()
+addName name ty = do
+    oldMap <- gets namespace
+    modify (\state -> state { namespace = M.insert name ty oldMap })
+
+addIdent :: Ident -> TypeCheckM ()
+addIdent (Id name ty) = addName name ty
+addIdent _ = error "Can only track types, not kinds."
+
+lookupType :: String -> TypeCheckM (Maybe Type)
+lookupType name = M.lookup name <$> gets namespace
+
+-- | Add an error to the log.
+reportError :: String -> TypeCheckM ()
+reportError e = do
+    es <- gets errors
+    modify (\state -> state { errors = e:es })
+
+-- | Extract types of top-level term identifiers.
+getTopLevelTermTypes :: Module -> [(String, Type)]
+getTopLevelTermTypes (Module _ decls) = [("dumpInt", TyInt ~> TyInt)] ++ (catMaybes $ map getTermDeclType decls)
+    where
+        getTermDeclType (DType _ _) = Nothing
+        getTermDeclType (DTerm (Id name ty) _) = Just (name, ty)
+
+processModule :: Module -> TypeCheckM Module
+processModule (Module name decls) = Module name <$> mapM processDecl decls
+
+processDecl :: Decl -> TypeCheckM Decl
+processDecl decl@(DTerm ident expr) = do
+    ty <- calculateType expr
+    case ty == typeOf ident of
+        True -> pure decl
+        False -> do
+            reportError $ printf "Type mismatch in top-level decl. Expected %s, got %s." (ppType $ typeOf ident) (ppType ty)
+            pure decl
+processDecl (DType ident constructors) = undefined
+
+checkIdent :: Ident -> Expr Ident -> TypeCheckM Type
+checkIdent (Id name ty1) expr = do
+    ty2 <- calculateType expr
+    case ty1 == ty2 of
+        True -> pure ty1
+        False -> do
+            reportError $ printf "Type mismatch. Identifier has type %s but the expression has type %s." (ppType ty1) (ppType ty2)
+            pure ty1
+
+-- | Calculate the type of the given expression.
+calculateType :: Expr Ident -> TypeCheckM Type
+calculateType (V ident) = do
+    -- Lookup name in namespace.
+    mty <- lookupType $ name ident
+    -- Make sure it's the same as the ident's.
+    case mty of
         Just ty -> case ty == typeOf ident of
             True -> pure ty
-            False -> error $ printf "Type mismatch. Identifier %s has type %s but value in scope has type %s." (name ident) (ppType $ typeOf ident) (ppType ty)
-getType (l :@ r) = do
-    lTy <- getType l
-    rTy <- getType r
+            False -> do
+                reportError $ printf "Type mismatch. Identifier has type %s but the value in scope has type %s." (ppType $ typeOf ident) (ppType ty)
+                pure ty
+        Nothing -> do
+            reportError $ printf "Type lookup failed: %s." $ ppIdent ident
+            pure $ typeOf ident
+calculateType (L lit) = pure TyInt
+calculateType (l :@ r) = do
+    lTy <- calculateType l
     case lTy of
-        (TyFun lTy2 rTy2) -> case lTy2 == rTy of
-            True -> pure rTy2
-            False -> error $ printf "Type mismatch. Function expects %s but got %s." (ppType lTy2) (ppType rTy)
-        _ -> error "Can't apply non-functions."
-getType (Case expr ty alts) = do
-    res <- mapM checkAlt alts
-    case and res of
-        True -> pure ty
-        False -> error "Type mismatch in case expression."
-    where
-        checkAlt (tag, binders, body) = do
-            bty <- local (insertIdents binders) $ getType body
-            pure $ bty == ty
-getType (Constr tag ty values)
-    | length values == getTypeArity ty = do
-        passed <- and <$> checkTypes ty values
+        -- Term application.
+        TyFun lTy2 rTy2 -> do
+            rTy <- calculateType r
+            case lTy2 == rTy of
+                True -> pure rTy2
+                False -> do
+                    reportError $ printf "Type mismatch. Function expecting value of type %s but got type %s." (ppType lTy2) (ppType rTy)
+                    pure $ rTy2
+        -- Type application.
+        TyForAll ident ty1 -> case r of
+            Type ty2 -> case kindOf ident == calculateKind ty2 of
+                True -> pure $ applyType (TyForAll ident ty1) ty2
+                False -> do
+                    reportError $ printf "kind mismatch. Type application expecting type of kind %s but got kind %s." (ppType $ kindOf ident) (ppType $ calculateKind ty2)
+                    pure ty2
+            expr -> error $ printf "Syntax error. Expected type for application, got other expression instead: %s" (ppExpr expr)
+calculateType (Lam ident@(Id name ty) expr) = subScope $ do
+    addName name ty
+    ty2 <- calculateType expr
+    pure $ ty ~> ty2
+calculateType (Lam ident@(TyId name ty) expr) = subScope $ do
+    addName name ty
+    ty2 <- calculateType expr
+    pure $ TyForAll ident ty2
+calculateType (Let rec bindings expr) = subScope $ do
+    forM_ bindings $ \(ident, bexpr) -> do
+        addName (name ident) =<< checkIdent ident bexpr
+    calculateType expr
+calculateType (Case expr ty alts) = do
+    forM_ alts $ \(tag, binders, body) -> subScope $ do
+        mapM_ addIdent binders
+        ty2 <- calculateType body
+        unless (ty == ty2) $ reportError $ printf "Type mismatch. Case alt has type %s where %s is expected." (ppType ty2) (ppType ty)
+    pure ty
+calculateType (Constr tag ty exprs)
+    | length exprs == getTypeArity ty = do
+        passed <- and <$> checkTypes ty exprs
         if passed then pure $ returnType ty else error "Type mismatch in data constructor."
-    | length values > getTypeArity ty = error "Data constructor over-saturated."
-    | length values < getTypeArity ty = error "Unsaturated data constructor."
-    where
-        checkTypes :: Type -> [Expr Ident] -> Reader (M.Map String Type) [Bool]
-        checkTypes (TyFun l r) (v:vs) = do
-            ety <- getType v
-            rest <- checkTypes r vs
-            pure $ (l == ety) : rest
-        checkTypes ty' (v:[]) = do
-            ety <- getType v
-            pure $ (ty' == ety) : []
-        checkTypes ty' [] = pure []  -- Nullary constructors.
-        checkTypes ty' vs = error $ printf "Foo: %s -- %s" (show ty') (show vs)
-getType (PrimFun pf) = pure $ getTypePF pf
+    | length exprs > getTypeArity ty = error "Data constructor over-saturated."
+    | length exprs < getTypeArity ty = error "Unsaturated data constructor."
+  where
+    checkTypes :: Type -> [Expr Ident] -> TypeCheckM [Bool]
+    checkTypes (TyFun l r) (v:vs) = do
+        ety <- calculateType v
+        rest <- checkTypes r vs
+        pure $ (l == ety) : rest
+    checkTypes ty' (v:[]) = do
+        ety <- calculateType v
+        pure $ (ty' == ety) : []
+    checkTypes ty' [] = pure []  -- Nullary constructors.
+    checkTypes ty' vs = error $ printf "Foo: %s -- %s" (show ty') (show vs)
+calculateType (PrimFun pf) = pure $ getTypePF pf
+calculateType (Type ty) = error $ printf "Found type (%s) where term was expected." $ ppType ty
 
 getTypePF :: PrimFun -> Type
 getTypePF (PrimBinOp op) = TyInt ~> TyInt ~> TyInt
 
-insertIdent :: Ident -> M.Map String Type -> M.Map String Type
-insertIdent (Id name ty) map = M.insert name ty map
-
-insertIdents :: [Ident] -> M.Map String Type -> M.Map String Type
-insertIdents ((Id name ty):xs) map = insertIdents xs $ M.insert name ty map
-insertIdents [] map = map
-
-buildTypeMap :: [Decl] -> M.Map String Type
-buildTypeMap decls = M.fromList $ (++ [("dumpInt", TyInt ~> TyInt)]) $ catMaybes $ map getType decls
-    where
-        getType (DTerm (Id name ty) _) = Just (name, ty)
-        getType _ = Nothing
+-- | Calculate the kind of a type.
+calculateKind :: Type -> Kind
+calculateKind = const TyKindStar  -- Cirrently only kind * is supported.

@@ -19,7 +19,7 @@ import TypeCheck
 main :: IO ()
 main = do
     [backend, srcFile] <- getArgs
-    mod <- (checkModule . genAST) <$> readFile srcFile
+    mod <- (typecheck . genAST) <$> readFile srcFile
     case backend of
         "-bviac" -> writeFile (srcFile++".c") $ compile $ core2stg mod
         "-bpp" -> putStrLn $ pp mod
