@@ -17,7 +17,7 @@ import STG.ViaC.Builder
 
 -- | Generate a C program from an STG AST.
 compile :: Program -> String
-compile (Program bindings) = "#include \"RTS.h\"\n\n" ++ unlines (("//Decls." : map genDecl defs) ++ ("// Defs." : map genDef defs)) ++ "\nint main(int argc, char const *argv[]) { runRTS(main_closure, argc, argv); }\n"
+compile (Program bindings) = "#include \"RTS.h\"\n\n" ++ unlines (("// Decls." : map genDecl defs) ++ ("// Defs." : map genDef defs)) ++ "\nint main(int argc, char const *argv[]) { runRTS(main_closure, argc, argv); }\n"
     where
         defs = concatMap (buildGlobal (makeGlobalMap bindings)) bindings
 
