@@ -17,6 +17,7 @@ executable simplelang
                        Parsec
                        PrettyPrinter
                        TypeCheck
+                       Util
   build-depends:       base ==4.6.*,
                        lens ==3.10.*,
                        transformers ==0.3.*,
