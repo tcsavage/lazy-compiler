@@ -15,22 +15,13 @@ import qualified Data.Set as S
 import qualified AST as Core
 import AST (Expr((:@)))
 import qualified STG.AST as STG
+import Util
 
 type Unique = Int
 
 data Translator = Translator { newLets :: D.DList STG.Binding, nextUnique :: Unique, bound :: S.Set String }
 
 type TranslatorM a = State Translator a
-
-whenM :: Monad m => m Bool -> m () -> m ()
-whenM cond comp = do
-    c <- cond
-    when c comp
-
-condM :: Monad m => m Bool -> m a -> m a -> m a
-condM cond t f = do
-    c <- cond
-    if c then t else f
 
 appendLets :: [STG.Binding] -> TranslatorM ()
 appendLets bindings = do
