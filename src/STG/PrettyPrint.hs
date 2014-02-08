@@ -29,7 +29,7 @@ instance PrettyPrint Expr where
     pp (LetRec bs expr) = printf "let rec {%s} in %s" (intercalate "; " $ map pp bs) (pp expr)
     pp (Case expr alts) = printf "case %s of { %s }" (pp expr) (pp alts)
     pp (Ap var atoms) = printf "%s {%s}" var (intercalate "," $ map pp atoms)
-    pp (Constr tag atoms) = undefined
+    pp (Constr tag atoms) = printf "Pack{%d%s}" tag (concat $ map (\a -> ", " ++ pp a) atoms)
     pp (Prim prim atoms) = printf "%s {%s}" (pp prim) (intercalate "," $ map pp atoms)
     pp (Literal lit) = show lit
 
