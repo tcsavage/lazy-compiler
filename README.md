@@ -11,7 +11,7 @@ Todo
 * ~~GCode compiler (to C)~~
 * ~~Replace G-Machine with STG [Peyton Jones & Salkild 1989]~~
 * LLVM backend
-* Extend core language to System-F [Reynolds 1974]
+* ~~Extend core language to System-F [Reynolds 1974]~~
 
 Usage
 -----
@@ -29,8 +29,6 @@ Directories
 
 * examples
     * Example programs
-* res
-    * Compiler run-time files
 * rts
     * Runtime system code (C)
 * src
@@ -39,8 +37,10 @@ Directories
 Modules
 -------
 
-* *AST* - Core language syntax tree and helpter functions.
-* *Parsec* - Parsec parser for core.
-* *PrettyPrinter* - Functions for pretty printing of core AST.
+* *Core* - Core language
+    * *AST* - Core language syntax tree and helpter functions.
+    * *TypeCheck* - Type-checks core AST
+    * *Parsec* - Parsec parser for core.
+    * *PrettyPrinter* - Functions for pretty printing of core AST.
 * *STG* - STG generation, pretty printing and compilation.
-* *TypeCheck* - Type-checks core AST.
+* *Util* - Miscellaneous helpers
