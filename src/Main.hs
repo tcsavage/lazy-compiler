@@ -8,13 +8,13 @@ import System.Environment
 import Text.Printf
 import Text.Show.Pretty
 
-import AST
+import Core.AST
+import Core.Parsec
+import Core.PrettyPrinter
+import Core.TypeCheck
 import STG.FromCore
 import STG.PrettyPrint
 import STG.ViaC
-import Parsec
-import PrettyPrinter
-import TypeCheck
 
 main :: IO ()
 main = do

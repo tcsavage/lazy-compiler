@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module AST where
+module Core.AST where
 
 import Control.Applicative
 import Control.Lens

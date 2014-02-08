@@ -8,15 +8,15 @@ cabal-version:       >=1.8
 
 executable simplelang
   main-is:             Main.hs
-  other-modules:       AST
+  other-modules:       Core.AST
+                       Core.Parsec
+                       Core.PrettyPrinter
+                       Core.TypeCheck
                        STG.AST
                        STG.FromCore
                        STG.PrettyPrint
                        STG.ViaC
                        STG.ViaC.Builder
-                       Parsec
-                       PrettyPrinter
-                       TypeCheck
                        Util
   build-depends:       base ==4.6.*,
                        lens ==3.10.*,

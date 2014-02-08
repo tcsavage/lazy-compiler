@@ -1,4 +1,4 @@
-module Parsec where
+module Core.Parsec where
 
 import Control.Applicative (pure, (<*>), (*>), (<$>))
 import Control.Monad
@@ -7,7 +7,7 @@ import Text.Parsec.Combinator
 import Text.Parsec.Token
 import Text.Printf
 
-import AST
+import Core.AST
 
 -- | Parse a global definition.
 parseSource :: String -> Either ParseError Module

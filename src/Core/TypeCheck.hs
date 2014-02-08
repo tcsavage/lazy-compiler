@@ -1,6 +1,6 @@
 {-# LANGUAGE PackageImports #-}
 
-module TypeCheck where
+module Core.TypeCheck where
 
 import Control.Applicative
 import Control.Monad
@@ -10,8 +10,8 @@ import qualified Data.Map as M
 import Data.Maybe
 import Text.Printf
 
-import AST
-import PrettyPrinter
+import Core.AST
+import Core.PrettyPrinter
 
 -- | Check types. Simple enough.
 typecheck :: Module -> Module

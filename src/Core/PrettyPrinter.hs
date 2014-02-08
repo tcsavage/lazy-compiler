@@ -1,9 +1,9 @@
-module PrettyPrinter where
+module Core.PrettyPrinter where
 
 import Data.List
 import Text.Printf
 
-import AST
+import Core.AST
 
 pp :: Module -> String
 pp (Module name decls) = printf "module %s where\n\n%s" name (unlines $ map ppDecl decls)

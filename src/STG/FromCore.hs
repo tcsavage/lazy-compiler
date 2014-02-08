@@ -12,8 +12,8 @@ import Data.Maybe
 import Data.Monoid
 import qualified Data.Set as S
 
-import qualified AST as Core
-import AST (Expr((:@)))
+import qualified Core.AST as Core
+import Core.AST (Expr((:@)))
 import qualified STG.AST as STG
 import Util
 
