@@ -1,5 +1,17 @@
 module PolymorphicTest where
 
-i : forall a. a -> a = /\a. \x:a. x:a
+i : forall a:Any. a:Any -> a:Any = /\a:Any. \x:a:Any. x:a:Any
+k : forall a:Any. a:Any -> (forall b:Any. b:Any -> a:Any) = /\a:Any. \x:a:Any. /\b:Any. \y:b:Any. x:a:Any
 
-main : Int = dumpInt:Int->Int @ (i:(forall a. a -> a) @ <Int> @ 5)
+data List a:Any where
+    Null : List:Any#>Any ~ a:Any;
+    Cons : a:Any -> List:Any#>Any ~ a:Any -> List:Any#>Any ~ a:Any
+end
+
+singleton : forall a:Any. a:Any -> List:Any#>Any ~ a:Any = /\a:Any. \x:a:Any. Pack{1, a:Any -> List:Any#>Any ~ a:Any -> List:Any#>Any ~ a:Any}{x:a:Any, Pack{0, List:Any#>Any ~ a:Any}{}}
+
+head : forall a:Any. (List:Any#>Any ~ a:Any) -> a:Any = /\a:Any. \x:(List:Any#>Any ~ a:Any). case x:(List:Any#>Any ~ a:Any) of a:Any where <1> <y:a:Any> <ys:List:Any#>Any ~ a:Any> -> y:a:Any end
+
+testList : List:Any#>Any ~ Int = singleton:(forall a:Any. a:Any -> List:Any#>Any ~ a:Any) @ <Int> @ 59
+
+main:Int = dumpInt:Int->Int @ (i:(forall a:Any. a:Any -> a:Any) @ <Int> @ (head:(forall a:Any. (List:Any#>Any ~ a:Any) -> a:Any) @ <Int> @ testList:(List:Any#>Any ~ Int)))
