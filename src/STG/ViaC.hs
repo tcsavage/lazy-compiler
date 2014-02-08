@@ -86,6 +86,11 @@ buildExpr self (Let bindings expr) = do
     mapM_ (buildLetBinding self) bindings
     -- Build rest.
     buildExpr self expr
+buildExpr self (LetRec bindings expr) = do
+    -- Make bindings.
+    mapM_ (buildLetBinding self) bindings
+    -- Build rest.
+    buildExpr self expr
 buildExpr self (Case expr alts) = do
     -- Build the return vector from the alternatives (and push it onto the stack).
     buildCaseVectoredReturn self alts
@@ -106,6 +111,9 @@ buildExpr self (Constr tag atoms) = do
     append $ Code $ printf "rTag = %d" tag
     append $ Code "JUMP(((StgAddr *)popB())[0])"
 buildExpr self (Prim prim atoms) = buildPrimCall self prim atoms
+buildExpr self (Literal lit) = do
+    append $ Code $ printf "retInt = %d" lit
+    append $ Code "JUMP(((StgAddr *)popB())[0])"
 
 -- | Generate abstract C code for a let binding.
 buildLetBinding :: Var -> Binding -> BuilderM ()
@@ -205,7 +213,7 @@ buildConstructorClosure self tag atoms = do
     -- Set info table.
     append $ Code $ printf "hp[0] = &_constructor%d_info" $ length atoms
     -- Set tag.
-    append $ Code $ printf "hp[1] = %d" tag
+    append $ Code $ printf "hp[1] = (StgAddr)%d" tag
     -- Set data.
     forM_ (zip atoms [(2::Int)..]) $ \(atom, offset) -> case atom of
         (AtomVar var) -> do
