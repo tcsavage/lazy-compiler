@@ -1,17 +1,25 @@
 module PolymorphicTest where
 
+-- Identity function.
 i : forall a:Any. a:Any -> a:Any = /\a:Any. \x:a:Any. x:a:Any
+
+-- Constant function.
 k : forall a:Any. a:Any -> (forall b:Any. b:Any -> a:Any) = /\a:Any. \x:a:Any. /\b:Any. \y:b:Any. x:a:Any
 
+-- Polymorphic list type.
 data List a:Any where
     Null : List:Any#>Any ~ a:Any;
     Cons : a:Any -> List:Any#>Any ~ a:Any -> List:Any#>Any ~ a:Any
 end
 
+-- Wrap a value into a list of length 1.
 singleton : forall a:Any. a:Any -> List:Any#>Any ~ a:Any = /\a:Any. \x:a:Any. Pack{1, a:Any -> List:Any#>Any ~ a:Any -> List:Any#>Any ~ a:Any}{x:a:Any, Pack{0, List:Any#>Any ~ a:Any}{}}
 
+-- Partial head function.
 head : forall a:Any. (List:Any#>Any ~ a:Any) -> a:Any = /\a:Any. \x:(List:Any#>Any ~ a:Any). case x:(List:Any#>Any ~ a:Any) of a:Any where <1> <y:a:Any> <ys:List:Any#>Any ~ a:Any> -> y:a:Any end
 
+-- [59]
 testList : List:Any#>Any ~ Int = singleton:(forall a:Any. a:Any -> List:Any#>Any ~ a:Any) @ <Int> @ 59
 
+-- i (head testList)
 main:Int = dumpInt:Int->Int @ (i:(forall a:Any. a:Any -> a:Any) @ <Int> @ (head:(forall a:Any. (List:Any#>Any ~ a:Any) -> a:Any) @ <Int> @ testList:(List:Any#>Any ~ Int)))
