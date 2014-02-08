@@ -5,6 +5,7 @@ module TypeCheck where
 import Control.Applicative
 import Control.Monad
 import "mtl" Control.Monad.State
+import Data.Either
 import qualified Data.Map as M
 import Data.Maybe
 import Text.Printf
@@ -14,35 +15,42 @@ import PrettyPrinter
 
 -- | Check types. Simple enough.
 typecheck :: Module -> Module
-typecheck m = let (m', state) = runState (processModule m) (TypeCheck (M.fromList $ getTopLevelTermTypes m) [])
+typecheck m = let (m', state) = runState (processModule m) (buildInitialState m)
               in case errors state of
                 [] -> m'
                 es -> error $ unlines $ reverse es
 
-data TypeCheck = TypeCheck { namespace :: M.Map String Type, errors :: [String] }
+data TypeCheck = TypeCheck { typeMap :: M.Map String Type, kindMap :: M.Map String Kind, errors :: [String] }
 
 type TypeCheckM a = State TypeCheck a
 
 -- | Run an action inside its own inner scope. All types mapped inside this scope will not be accessible outside.
 subScope :: TypeCheckM a -> TypeCheckM a
 subScope action = do
-    oldMap <- gets namespace
+    oldTypes <- gets typeMap
+    oldKinds <- gets kindMap
     r <- action
-    modify (\state -> state { namespace = oldMap })
+    modify (\state -> state { typeMap = oldTypes, kindMap = oldKinds })
     pure r
 
--- | Add a type to the namespace map.
-addName :: String -> Type -> TypeCheckM ()
-addName name ty = do
-    oldMap <- gets namespace
-    modify (\state -> state { namespace = M.insert name ty oldMap })
+-- | Add a type to the typeMap.
+addType :: String -> Type -> TypeCheckM ()
+addType name ty = do
+    oldMap <- gets typeMap
+    modify (\state -> state { typeMap = M.insert name ty oldMap })
+
+-- | Add a type to the kindMap.
+addKind :: String -> Kind -> TypeCheckM ()
+addKind name ty = do
+    oldMap <- gets kindMap
+    modify (\state -> state { kindMap = M.insert name ty oldMap })
 
 addIdent :: Ident -> TypeCheckM ()
-addIdent (Id name ty) = addName name ty
+addIdent (Id name ty) = addType name ty
 addIdent _ = error "Can only track types, not kinds."
 
 lookupType :: String -> TypeCheckM (Maybe Type)
-lookupType name = M.lookup name <$> gets namespace
+lookupType name = M.lookup name <$> gets typeMap
 
 -- | Add an error to the log.
 reportError :: String -> TypeCheckM ()
@@ -50,25 +58,27 @@ reportError e = do
     es <- gets errors
     modify (\state -> state { errors = e:es })
 
--- | Extract types of top-level term identifiers.
-getTopLevelTermTypes :: Module -> [(String, Type)]
-getTopLevelTermTypes (Module _ decls) = [("dumpInt", TyInt ~> TyInt)] ++ (catMaybes $ map getTermDeclType decls)
+-- | Extract types of top-level term identifiers and kinds of top-level types.
+buildInitialState :: Module -> TypeCheck
+buildInitialState (Module _ decls) = TypeCheck (M.fromList ([("dumpInt", TyInt ~> TyInt)] ++ types)) (M.fromList kinds) []
     where
-        getTermDeclType (DType _ _) = Nothing
-        getTermDeclType (DTerm (Id name ty) _) = Just (name, ty)
+        getDecl :: Decl -> Either (String, Type) (String, Kind)
+        getDecl (DTerm (Id name ty) _) = Left (name, ty)
+        getDecl (DType (TyId name ki) _) = Right (name, ki)
+        (types, kinds) = partitionEithers $ map getDecl decls
 
 processModule :: Module -> TypeCheckM Module
 processModule (Module name decls) = Module name <$> mapM processDecl decls
 
 processDecl :: Decl -> TypeCheckM Decl
 processDecl decl@(DTerm ident expr) = do
-    ty <- calculateType expr
+    ty <- subScope $ calculateType expr
     case ty == typeOf ident of
         True -> pure decl
         False -> do
             reportError $ printf "Type mismatch in top-level decl. Expected %s, got %s." (ppType $ typeOf ident) (ppType ty)
             pure decl
-processDecl (DType ident constructors) = undefined
+processDecl (DType ident constructors) = pure $ (DType ident constructors)  -- TODO: should probably check kinds here.
 
 checkIdent :: Ident -> Expr Ident -> TypeCheckM Type
 checkIdent (Id name ty1) expr = do
@@ -82,7 +92,7 @@ checkIdent (Id name ty1) expr = do
 -- | Calculate the type of the given expression.
 calculateType :: Expr Ident -> TypeCheckM Type
 calculateType (V ident) = do
-    -- Lookup name in namespace.
+    -- Lookup name in typeMap.
     mty <- lookupType $ name ident
     -- Make sure it's the same as the ident's.
     case mty of
@@ -108,23 +118,25 @@ calculateType (l :@ r) = do
                     pure $ rTy2
         -- Type application.
         TyForAll ident ty1 -> case r of
-            Type ty2 -> case kindOf ident == calculateKind ty2 of
-                True -> pure $ applyType (TyForAll ident ty1) ty2
-                False -> do
-                    reportError $ printf "kind mismatch. Type application expecting type of kind %s but got kind %s." (ppType $ kindOf ident) (ppType $ calculateKind ty2)
-                    pure ty2
+            Type ty2 -> do
+                ki <- calculateKind ty2
+                case kindOf ident == ki of
+                    True -> pure $ applyType (TyForAll ident ty1) ty2
+                    False -> do
+                        reportError $ printf "kind mismatch. Type application expecting type of kind %s but got kind %s." (ppKind $ kindOf ident) (ppKind ki)
+                        pure ty2
             expr -> error $ printf "Syntax error. Expected type for application, got other expression instead: %s" (ppExpr expr)
 calculateType (Lam ident@(Id name ty) expr) = subScope $ do
-    addName name ty
+    addType name ty
     ty2 <- calculateType expr
     pure $ ty ~> ty2
-calculateType (Lam ident@(TyId name ty) expr) = subScope $ do
-    addName name ty
+calculateType (Lam ident@(TyId name ki) expr) = subScope $ do
+    addKind name ki
     ty2 <- calculateType expr
     pure $ TyForAll ident ty2
 calculateType (Let rec bindings expr) = subScope $ do
     forM_ bindings $ \(ident, bexpr) -> do
-        addName (name ident) =<< checkIdent ident bexpr
+        addType (name ident) =<< checkIdent ident bexpr
     calculateType expr
 calculateType (Case expr ty alts) = do
     forM_ alts $ \(tag, binders, body) -> subScope $ do
@@ -156,5 +168,21 @@ getTypePF :: PrimFun -> Type
 getTypePF (PrimBinOp op) = TyInt ~> TyInt ~> TyInt
 
 -- | Calculate the kind of a type.
-calculateKind :: Type -> Kind
-calculateKind = const TyKindStar  -- Cirrently only kind * is supported.
+calculateKind :: Type -> TypeCheckM Kind
+calculateKind (TyFun l r) = pure KiStar
+calculateKind (TyInt) = pure KiStar
+calculateKind (TyVar ident) = pure $ kindOf ident
+calculateKind (TyForAll ident ty) = calculateKind ty
+calculateKind (TyAp tyL tyR) = do
+    kiL <- calculateKind tyL
+    case kiL of
+        KiFun l r -> do
+            kiR <- calculateKind tyR
+            case kiR == r of
+                True -> pure l
+                False -> do
+                    reportError $ printf "Kind mismatch. Applying type of kind %s where %s is expected." (ppKind kiR) (ppKind r)
+                    pure r
+        kind -> do
+            reportError $ printf "Attempting to apply type of kind %s to concrete type %s." (ppKind kind) (ppType tyL)
+            pure kind

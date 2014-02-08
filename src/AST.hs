@@ -28,12 +28,13 @@ data Expr a = V a  -- Variable
 data Type = TyFun Type Type
           | TyInt
           | TyVar Ident
-          | TyAp Type Type
           | TyForAll Ident Type
-          | TyKindStar
+          | TyAp Type Type
           deriving (Eq,Ord,Show,Read)
 
-type Kind = Type
+data Kind = KiFun Kind Kind
+          | KiStar
+          deriving (Eq,Ord,Show,Read)
 
 (~>) :: Type -> Type -> Type
 (~>) = TyFun
@@ -95,6 +96,5 @@ applyType (TyForAll ident ty1) ty2 = replaceIdent ident ty2 ty1
         replaceIdent ident target (TyFun tyl tyr) = TyFun (replaceIdent ident target tyl) (replaceIdent ident target tyr)
         replaceIdent ident target (TyInt) = TyInt
         replaceIdent ident target ty@(TyVar tyident) = if ident == tyident then target else ty
-        replaceIdent ident target (TyAp tyl tyr) = undefined
         replaceIdent ident target ty@(TyForAll tyident tyin) = if ident == tyident then replaceIdent ident target tyin else ty
-        replaceIdent ident target (TyKindStar) = TyKindStar
+        replaceIdent ident target (TyAp l r) = TyAp (replaceIdent ident target l) (replaceIdent ident target r)

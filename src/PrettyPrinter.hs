@@ -16,19 +16,24 @@ ppDecl (DType ident constrs) = printf "data %s where\n%send" (ppIdent ident) (un
 
 ppIdent :: Ident -> String
 ppIdent (Id name ty) = printf "%s:%s" name (ppType ty)
-ppIdent (TyId name ki) = printf "%s:%s" name (ppType ki)
+ppIdent (TyId name ki) = printf "%s:%s" name (ppKind ki)
 
 ppType :: Type -> String
 ppType TyInt = "Int"
 ppType (TyFun l r) = printf "(%s -> %s)" (ppType l) (ppType r)
 ppType (TyVar ident) = printf "%s" (ppIdent ident)
-ppType (TyForAll ident ty) = printf "forall %s. %s" (ppIdent ident) (ppType ty)
-ppType TyKindStar = "*"
+ppType (TyForAll ident ty) = printf "∀%s. %s" (ppIdent ident) (ppType ty)
+ppType (TyAp l r) = printf "(%s %s)" (ppType l) (ppType r)
+
+ppKind :: Kind -> String
+ppKind KiStar = "*"
+ppKind (KiFun l r) = printf "(%s -> %s)" (ppKind l) (ppKind r)
 
 ppExpr :: Expr Ident -> String
 ppExpr (L n) = show n
 ppExpr (V ident) = ppIdent ident
-ppExpr (Lam b e) = printf "\\%s. %s" (ppIdent b) (ppExpr e)
+ppExpr (Lam b@(TyId name ki) e) = printf "Λ%s. %s" (ppIdent b) (ppExpr e)
+ppExpr (Lam b e) = printf "λ%s. %s" (ppIdent b) (ppExpr e)
 ppExpr (l :@ r) = printf "(%s @ %s)" (ppExpr l) (ppExpr r)
 ppExpr (Let rec ds e) = printf "let%s %s in %s" (if rec then "rec" else "") (intercalate ", " $ map ppDef ds) (ppExpr e)
     where
