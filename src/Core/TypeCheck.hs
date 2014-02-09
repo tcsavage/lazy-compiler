@@ -46,9 +46,10 @@ addKind name ty = do
     oldMap <- gets kindMap
     modify (\state -> state { kindMap = M.insert name ty oldMap })
 
+-- | Add an id to the type or kind map.
 addIdent :: Ident -> TypeCheckM ()
 addIdent (Id name ty) = addType name ty
-addIdent _ = error "Can only track types, not kinds."
+addIdent (TyId name ki) = addKind name ki
 
 lookupType :: String -> TypeCheckM (Maybe Type)
 lookupType name = M.lookup name <$> gets typeMap
@@ -64,10 +65,10 @@ initMod :: Module -> TypeCheckM ()
 initMod (Module _ decls) = do
     addType "dumpInt" (TyInt ~> TyInt)
     forM_ decls $ \decl -> case decl of
-        DTerm (Id name ty) _ -> addType name ty
-        DType (TyId name ki) constrs -> do
-            addKind name ki
-            forM_ constrs $ \(Id cname ty) -> addType cname ty
+        DTerm ident _ -> addIdent ident
+        DType ident constrs -> do
+            addIdent ident
+            mapM_ addIdent constrs
 
 processModule :: Module -> TypeCheckM Module
 processModule (Module name decls) = Module name <$> mapM processDecl decls
@@ -129,11 +130,11 @@ calculateType (l :@ r) = do
                         pure ty2
             expr -> error $ printf "Syntax error. Expected type for application, got other expression instead: %s" (ppExpr expr)
 calculateType (Lam ident@(Id name ty) expr) = subScope $ do
-    addType name ty
+    addIdent ident
     ty2 <- calculateType expr
     pure $ ty ~> ty2
-calculateType (Lam ident@(TyId name ki) expr) = subScope $ do
-    addKind name ki
+calculateType (Lam ident expr) = subScope $ do
+    addIdent ident
     ty2 <- calculateType expr
     pure $ TyForAll ident ty2
 calculateType (Let rec bindings expr) = subScope $ do
