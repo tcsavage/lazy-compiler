@@ -15,7 +15,8 @@ import Core.PrettyPrinter
 
 -- | Check types. Simple enough.
 typecheck :: Module -> Module
-typecheck m = let (m', state) = runState (processModule m) (buildInitialState m)
+typecheck m = let emptyState = TypeCheck M.empty M.empty []
+                  (m', state) = runState (initMod m >> processModule m) emptyState
               in case errors state of
                 [] -> m'
                 es -> error $ unlines $ reverse es
@@ -58,14 +59,15 @@ reportError e = do
     es <- gets errors
     modify (\state -> state { errors = e:es })
 
--- | Extract types of top-level term identifiers and kinds of top-level types.
-buildInitialState :: Module -> TypeCheck
-buildInitialState (Module _ decls) = TypeCheck (M.fromList ([("dumpInt", TyInt ~> TyInt)] ++ types)) (M.fromList kinds) []
-    where
-        getDecl :: Decl -> Either (String, Type) (String, Kind)
-        getDecl (DTerm (Id name ty) _) = Left (name, ty)
-        getDecl (DType (TyId name ki) _) = Right (name, ki)
-        (types, kinds) = partitionEithers $ map getDecl decls
+-- | Extract types of top-level term identifiers and kinds of top-level types, and add them to the state..
+initMod :: Module -> TypeCheckM ()
+initMod (Module _ decls) = do
+    addType "dumpInt" (TyInt ~> TyInt)
+    forM_ decls $ \decl -> case decl of
+        DTerm (Id name ty) _ -> addType name ty
+        DType (TyId name ki) constrs -> do
+            addKind name ki
+            forM_ constrs $ \(Id cname ty) -> addType cname ty
 
 processModule :: Module -> TypeCheckM Module
 processModule (Module name decls) = Module name <$> mapM processDecl decls
